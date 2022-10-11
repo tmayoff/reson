@@ -1,0 +1,1 @@
+project('simple', 'cpp', version: '0.1')
