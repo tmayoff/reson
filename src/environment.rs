@@ -2,12 +2,12 @@ use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct Environment {
-    source_dir: Option<PathBuf>,
-    build_dir: Option<PathBuf>,
+    pub source_dir: PathBuf,
+    pub build_dir: PathBuf,
 }
 
 impl Environment {
-    pub fn new(source_dir: Option<PathBuf>, build_dir: Option<PathBuf>) -> Self {
+    pub fn new(source_dir: PathBuf, build_dir: PathBuf) -> Self {
         Self {
             source_dir,
             build_dir,

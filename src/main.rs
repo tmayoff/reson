@@ -119,7 +119,7 @@ fn main() {
             let (source_dir, build_dir) = validate_dirs(build_dir.to_owned(), None, false, false)
                 .expect("Failed to validate dirs");
 
-            let env = Environment::new(Some(source_dir.clone()), Some(build_dir.clone()));
+            let env = Environment::new(source_dir.clone(), build_dir.clone());
 
             debug!("Build Started at {}", Local::now());
             info!("Reson Build System");
