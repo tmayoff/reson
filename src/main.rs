@@ -7,6 +7,13 @@ use std::{env::current_dir, path::Path, path::PathBuf};
 use chrono::prelude::*;
 use clap::{Parser, Subcommand};
 
+mod build;
+mod environment;
+mod interpreter;
+use crate::build::Build;
+use crate::environment::Environment;
+use crate::interpreter::Interpreter;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_FILE_NAME: &str = "meson.build";
 
@@ -112,11 +119,17 @@ fn main() {
             let (source_dir, build_dir) = validate_dirs(build_dir.to_owned(), None, false, false)
                 .expect("Failed to validate dirs");
 
+            let env = Environment::new(Some(source_dir.clone()), Some(build_dir.clone()));
+
             debug!("Build Started at {}", Local::now());
             info!("Reson Build System");
             info!("Version: {}", VERSION);
-            info!("Source Directory {:?}", source_dir.to_str());
-            info!("Build Directory {:?}", build_dir.to_str());
+            info!("Source Directory {:?}", source_dir);
+            info!("Build Directory {:?}", build_dir);
+
+            let build = Build::new(env);
+
+            let interpreter = Interpreter::new(build, None, None, None, None);
         }
 
         Commands::Compile {} => todo!(),
