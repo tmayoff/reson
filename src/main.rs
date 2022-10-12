@@ -81,8 +81,8 @@ fn validate_core_dirs(
 fn validate_dirs(
     dir1: Option<PathBuf>,
     dir2: Option<PathBuf>,
-    reconfigure: bool,
-    wipe: bool,
+    _reconfigure: bool,
+    _wipe: bool,
 ) -> Result<(PathBuf, PathBuf), Whatever> {
     // validate core dirs
     let (src_dir, build_dir) = validate_core_dirs(dir1, dir2)?;
