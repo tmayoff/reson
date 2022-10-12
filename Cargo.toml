@@ -12,3 +12,4 @@ clap = { version = "4.0.12", features = ["derive"] }
 env_logger = "0.9.1"
 log = "0.4.17"
 predicates = "2.1.1"
+snafu = "0.7.2"
