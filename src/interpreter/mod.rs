@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::{build::Build, BUILD_FILE_NAME};
+use crate::{build::Build, parser::Parser, BUILD_FILE_NAME};
 
 struct InterpreterBase {}
 
@@ -40,7 +40,18 @@ impl Interpreter {
         mesonfile.push(self.subdir.clone());
         mesonfile.push(BUILD_FILE_NAME);
 
-        self.code = fs::read_to_string(mesonfile)?;
+        self.code = fs::read_to_string(&mesonfile)?;
+
+        let filename = String::from(
+            mesonfile
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default(),
+        );
+
+        let p = Parser::new(self.code.clone(), filename);
+        p.parse();
 
         Ok(())
     }

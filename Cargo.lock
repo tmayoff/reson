@@ -477,8 +477,10 @@ dependencies = [
  "chrono",
  "clap",
  "env_logger",
+ "lazy_static",
  "log",
  "predicates",
+ "regex",
  "snafu",
 ]
 

@@ -1,0 +1,96 @@
+#[derive(PartialEq, Eq, Debug, Hash)]
+pub enum TokenValue {
+    Str(String),
+    Bool(bool),
+    Int(i32),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+pub enum TokenType {
+    True,
+    False,
+    If,
+    Else,
+    ElIf,
+    EndIf,
+    And,
+    Or,
+    Not,
+    Foreach,
+    EndForeach,
+    In,
+    Continue,
+    Break,
+
+    Ignore,
+    MultilineFstring,
+    FString,
+    String,
+    ID,
+    Number,
+    EolCont,
+    Eol,
+    MultilineString,
+    Comment,
+    LParen,
+    RParen,
+    LBracket,
+    RBracket,
+    LBrace,
+    RBrace,
+    DBLQuote,
+    Comma,
+    PlusAssign,
+    Dot,
+    Plus,
+    Dash,
+    Star,
+    Percent,
+    FSlash,
+    Colon,
+    Equal,
+    NEqual,
+    Assign,
+    LE,
+    LT,
+    GE,
+    GT,
+    NotIn,
+    QuestionMark,
+    EOF,
+}
+
+pub struct Token {
+    pub tid: TokenType,
+    pub filename: String,
+    pub line_start: i32,
+    pub lineno: i32,
+    pub colno: i32,
+    pub value: Option<TokenValue>,
+}
+
+impl Token {
+    pub fn new(
+        tid: TokenType,
+        filename: &str,
+        line_start: i32,
+        lineno: i32,
+        colno: i32,
+        value: Option<TokenValue>,
+    ) -> Self {
+        Token {
+            tid,
+            filename: filename.to_string(),
+            line_start,
+            lineno,
+            colno,
+            value,
+        }
+    }
+}
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        self.tid == other.tid
+    }
+}

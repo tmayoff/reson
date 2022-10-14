@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 mod build;
 mod environment;
 mod interpreter;
+mod parser;
 use crate::build::Build;
 use crate::environment::Environment;
 use crate::interpreter::Interpreter;
