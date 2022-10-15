@@ -1,5 +1,6 @@
-#[derive(PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum TokenValue {
+    None,
     Str(String),
     Bool(bool),
     Int(i32),
@@ -60,13 +61,27 @@ pub enum TokenType {
     EOF,
 }
 
+#[derive(Clone)]
 pub struct Token {
     pub tid: TokenType,
     pub filename: String,
     pub line_start: i32,
     pub lineno: i32,
     pub colno: i32,
-    pub value: Option<TokenValue>,
+    pub value: TokenValue,
+}
+
+impl Default for Token {
+    fn default() -> Self {
+        Self {
+            tid: TokenType::EOF,
+            filename: "".to_string(),
+            line_start: 0,
+            lineno: 0,
+            colno: 0,
+            value: TokenValue::None,
+        }
+    }
 }
 
 impl Token {
@@ -76,7 +91,7 @@ impl Token {
         line_start: i32,
         lineno: i32,
         colno: i32,
-        value: Option<TokenValue>,
+        value: TokenValue,
     ) -> Self {
         Token {
             tid,
