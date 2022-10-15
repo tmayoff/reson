@@ -1,71 +1,159 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::parser::token::TokenValue;
 
 use super::token::Token;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct ArgumentNode {
-    args: Vec<Node>,
+    arguments: Vec<Box<Node>>,
     pub commas: Vec<Token>,
-    kwargs: HashMap<Node, Node>,
+    kwargs: BTreeMap<Box<Node>, Box<Node>>,
     order_error: bool,
 }
 
 impl ArgumentNode {
     fn new() -> Self {
         Self {
-            args: Vec::new(),
+            arguments: Vec::new(),
             commas: Vec::new(),
-            kwargs: HashMap::new(),
+            kwargs: BTreeMap::new(),
             order_error: false,
         }
     }
 
-    pub fn append(&self, statement: Node) {
+    pub fn append(&mut self, statement: Box<Node>) {
         if self.kwargs.len() > 0 {
             self.order_error = true;
         }
 
         if statement.node_kind != NodeKind::EmptyNode {
-            self.args.push(statement);
+            self.arguments.push(statement);
         }
     }
 
-    pub fn set_kwarg(&self, name: Node, value: Node) {
+    pub fn set_kwarg(&mut self, name: Box<Node>, value: Box<Node>) {
         // TODO warning about duplicate kwargs
         self.kwargs.insert(name, value);
     }
 
-    pub fn set_kwarg_no_check(&self, name: Node, value: Node) {
+    pub fn set_kwarg_no_check(&mut self, name: Box<Node>, value: Box<Node>) {
         self.kwargs.insert(name, value);
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct MethodNode {
     source_object: Box<Node>,
     name: String,
     args: Box<Node>,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct IndexNode {
     iobject: Box<Node>,
     index: Box<Node>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
+pub enum NodeKind {
+    BoolNode {
+        value: bool,
+    },
+    IDNode {
+        value: String,
+    },
+    NumberNode {
+        value: i32,
+    },
+    StringNode {
+        value: String,
+    },
+    FStringNode {
+        value: String,
+    },
+    MultilineFStringNode {
+        value: String,
+    },
+    ContinueNode,
+    BreakNode,
+    ArgumentNode(ArgumentNode),
+    ArrayNode {
+        args: Box<Node>,
+    },
+    DictNode {
+        args: Box<Node>,
+    },
+    EmptyNode,
+    OrNode {
+        left: Box<Node>,
+        right: Box<Node>,
+    },
+    AndNode {
+        left: Box<Node>,
+        right: Box<Node>,
+    },
+    ComparisonNode {
+        left: Box<Node>,
+        right: Box<Node>,
+        ctype: String,
+    },
+    ArithmeticNode {
+        left: Box<Node>,
+        right: Box<Node>,
+        operation: String,
+    },
+    NotNode {
+        value: Box<Node>,
+    },
+    CodeBlock {
+        lines: Vec<Box<Node>>,
+    },
+    IndexNode(IndexNode),
+    MethodNode(MethodNode),
+    FunctionNode {
+        func_name: String,
+        args: Box<Node>,
+    },
+    AssignmentNode {
+        var_name: String,
+        value: Box<Node>,
+    },
+    PlusAssignmentNode {
+        var_name: String,
+        value: Box<Node>,
+    },
+    ForeachClauseNode {
+        varname: Vec<String>,
+        items: Box<Node>,
+        block: Box<Node>,
+    },
+    IfNode {
+        condition: Box<Node>,
+        block: Box<Node>,
+    },
+    IfClauseNode {
+        ifs: Vec<Box<Node>>,
+        elseblock: Option<Box<Node>>,
+    },
+    UMinusNode {
+        value: Box<Node>,
+    },
+    TernaryNode {
+        condition: Box<Node>,
+        trueblock: Box<Node>,
+        falseblock: Box<Node>,
+    },
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub struct Node {
     pub lineno: i32,
     pub colno: i32,
     pub filename: String,
     pub end_lineno: Option<i32>,
     pub end_colno: Option<i32>,
-
     pub node_kind: NodeKind,
-
-    pub value: Option<TokenValue>,
 }
 
 impl Default for Node {
@@ -77,183 +165,127 @@ impl Default for Node {
             end_lineno: Default::default(),
             end_colno: Default::default(),
             node_kind: NodeKind::EmptyNode,
-            value: Default::default(),
         }
     }
 }
 
-#[derive(PartialEq, Eq)]
-pub enum NodeKind {
-    EmptyNode,
-    BoolNode {
-        value: bool,
-    },
-    CodeBlock {
-        lines: Vec<Node>,
-    },
-    IDNode,
-    NumberNode,
-    StringNode,
-    FStringNode,
-    MultilineFStringNode,
-    ArgumentNode(ArgumentNode),
-    ArrayNode {
-        args: Box<Node>,
-    },
-    DictNode {
-        args: Box<Node>,
-    },
-    FunctionNode {
-        args: Box<Node>,
-    },
-    MethodNode(MethodNode),
-    IndexNode(IndexNode),
-    UMinusNode {
-        value: Box<Node>,
-    },
-    NotNode {
-        value: Box<Node>,
-    },
-    ArithmeticNode {
-        left: Box<Node>,
-        right: Box<Node>,
-        operation: String,
-    },
-
-    ComparisonNode {
-        left: Box<Node>,
-        right: Box<Node>,
-        ctype: String,
-    },
-
-    AndNode {
-        left: Box<Node>,
-        right: Box<Node>,
-    },
-
-    OrNode {
-        left: Box<Node>,
-        right: Box<Node>,
-    },
-
-    PlusAssignmentNode {
-        var_name: String,
-        value: Box<Node>,
-    },
-
-    AssignmentNode {
-        var_name: String,
-        value: Box<Node>,
-    },
-
-    TernaryNode {
-        condition: Box<Node>,
-        trueblock: Box<Node>,
-        falseblock: Box<Node>,
-    },
-
-    IfNode {
-        condition: Box<Node>,
-        block: Box<Node>,
-    },
-
-    IfClauseNode {
-        ifs: Vec<Node>,
-        elseblock: Option<Box<Node>>,
-    },
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.partial_cmp(other) {
+            Some(c) => c,
+            None => std::cmp::Ordering::Equal,
+        }
+    }
 }
 
-impl std::hash::Hash for NodeKind {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.lineno.partial_cmp(&other.lineno) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.colno.partial_cmp(&other.colno) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.filename.partial_cmp(&other.filename) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.end_lineno.partial_cmp(&other.end_lineno) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.end_colno.partial_cmp(&other.end_colno) {
+            Some(core::cmp::Ordering::Equal) => return None,
+            ord => return ord,
+        }
     }
 }
 
 impl Node {
-    pub fn new(tok: Token, node_kind: NodeKind) -> Self {
-        Self {
+    pub fn new(tok: Token, node_kind: NodeKind) -> Box<Self> {
+        Box::new(Self {
             lineno: tok.lineno,
             colno: tok.colno,
             filename: tok.filename,
             end_lineno: None,
             end_colno: None,
             node_kind,
-            value: tok.value,
-        }
+        })
     }
 
-    pub fn boolean_node(tok: Token) -> Self {
-        let v = tok.value.expect("Boolean node must contain a value");
+    pub fn boolean_node(tok: Token) -> Box<Self> {
+        let v = tok.value.clone();
         assert!(matches!(v, TokenValue::Bool(_)));
-        let TokenValue::Bool(v) = v;
-        Node::new(tok, NodeKind::BoolNode { value: v })
+        if let TokenValue::Bool(v) = v {
+            return Node::new(tok.clone(), NodeKind::BoolNode { value: v });
+        }
+
+        panic!("Value not a boolean");
     }
 
-    pub fn id_node(tok: Token) -> Self {
-        Node::new(tok, NodeKind::IDNode)
+    pub fn id_node(tok: Token, id: String) -> Box<Self> {
+        Node::new(tok, NodeKind::IDNode { value: id })
     }
 
-    pub fn number_node(tok: Token) -> Self {
-        Node::new(tok, NodeKind::NumberNode)
+    pub fn number_node(tok: Token, num: i32) -> Box<Self> {
+        Node::new(tok, NodeKind::NumberNode { value: num })
     }
 
-    pub fn string_node(tok: Token) -> Self {
-        Node::new(tok, NodeKind::StringNode)
+    pub fn string_node(tok: Token, str: String) -> Box<Self> {
+        Node::new(tok, NodeKind::StringNode { value: str })
     }
 
-    pub fn fstring_node(tok: Token) -> Self {
-        Node::new(tok, NodeKind::FStringNode)
+    pub fn fstring_node(tok: Token, str: String) -> Box<Self> {
+        Node::new(tok, NodeKind::FStringNode { value: str })
     }
 
-    pub fn multiline_fstring_node(tok: Token) -> Self {
-        Node::new(tok, NodeKind::MultilineFStringNode)
+    pub fn multiline_fstring_node(tok: Token, str: String) -> Box<Self> {
+        Node::new(tok, NodeKind::MultilineFStringNode { value: str })
     }
 
-    pub fn argument_node(tok: Token) -> Self {
+    pub fn argument_node(tok: Token) -> Box<Self> {
         let kind = NodeKind::ArgumentNode(ArgumentNode::new());
         Node::new(tok, kind)
     }
 
     pub fn array_node(
-        args: Node,
+        args: Box<Node>,
         lineno: i32,
         colno: i32,
         end_lineno: Option<i32>,
         end_colno: Option<i32>,
-    ) -> Self {
-        let kind = NodeKind::ArrayNode {
-            args: Box::from(args),
-        };
-        Self {
+    ) -> Box<Self> {
+        let filename = args.filename.clone();
+        let kind = NodeKind::ArrayNode { args };
+        Box::new(Self {
             lineno,
             colno,
-            filename: args.filename,
+            filename,
             end_lineno,
             end_colno,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
     pub fn dict_node(
-        args: Node,
+        args: Box<Node>,
         lineno: i32,
         colno: i32,
         end_lineno: Option<i32>,
         end_colno: Option<i32>,
-    ) -> Self {
-        let kind = NodeKind::DictNode {
-            args: Box::from(args),
-        };
-        Self {
+    ) -> Box<Self> {
+        let filename = args.filename.clone();
+        let kind = NodeKind::DictNode { args };
+        Box::new(Self {
             lineno,
             colno,
-            filename: args.filename,
+            filename,
             end_lineno,
             end_colno,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
     pub fn function_node(
@@ -263,183 +295,171 @@ impl Node {
         end_lineno: Option<i32>,
         end_colno: Option<i32>,
         func_name: String,
-        args: Node,
-    ) -> Self {
-        let kind = NodeKind::FunctionNode {
-            args: Box::new(args),
-        };
-
-        Self {
+        args: Box<Node>,
+    ) -> Box<Self> {
+        let kind = NodeKind::FunctionNode { func_name, args };
+        Box::new(Self {
             lineno,
             colno,
             filename,
             end_lineno,
             end_colno,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
     pub fn method_node(
         filename: String,
         lineno: i32,
         colno: i32,
-        source_object: Node,
+        source_object: Box<Node>,
         name: String,
-        args: Node,
-    ) -> Self {
+        args: Box<Node>,
+    ) -> Box<Self> {
         let kind = NodeKind::MethodNode(MethodNode {
-            source_object: Box::new(source_object),
+            source_object,
             name,
-            args: Box::new(args),
+            args,
         });
 
-        Self {
+        Box::new(Self {
             lineno,
             colno,
             filename,
             end_lineno: None,
             end_colno: None,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
-    pub fn if_node(linenode: Node, condition: Node, block: Node) -> Node {
-        let kind = NodeKind::IfNode {
-            condition: Box::new(condition),
-            block: Box::new(block),
-        };
-
-        Self {
+    pub fn if_node(linenode: Box<Node>, condition: Box<Node>, block: Box<Node>) -> Box<Node> {
+        let kind = NodeKind::IfNode { condition, block };
+        Box::new(Self {
             lineno: linenode.lineno,
             colno: linenode.colno,
             filename: linenode.filename,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn ifclause_node(linenode: Node) -> Node {
+    pub fn ifclause_node(linenode: &Box<Node>) -> Box<Self> {
         let kind = NodeKind::IfClauseNode {
             ifs: Vec::new(),
             elseblock: None,
         };
 
-        Self {
+        Box::new(Self {
             lineno: linenode.lineno,
             colno: linenode.colno,
             filename: linenode.filename,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn index_node(iobject: Node, index: Node) -> Self {
-        let kind = NodeKind::IndexNode(IndexNode {
-            iobject: Box::new(iobject),
-            index: Box::new(index),
-        });
+    pub fn index_node(iobject: Box<Node>, index: Box<Node>) -> Box<Self> {
+        let filename = iobject.filename.clone();
+        let lineno = iobject.lineno;
+        let colno = iobject.colno;
 
-        Self {
-            lineno: iobject.lineno,
-            colno: iobject.colno,
-            filename: iobject.filename,
+        let kind = NodeKind::IndexNode(IndexNode { iobject, index });
+        Box::new(Self {
+            lineno,
+            colno,
+            filename,
             end_lineno: None,
             end_colno: None,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
-    pub fn uminus_node(current_location: Token, value: Node) -> Self {
-        let kind = NodeKind::UMinusNode {
-            value: Box::new(value),
-        };
-
-        Self {
+    pub fn uminus_node(current_location: Token, value: Box<Node>) -> Box<Self> {
+        let kind = NodeKind::UMinusNode { value };
+        Box::new(Self {
             lineno: current_location.lineno,
             colno: current_location.colno,
             filename: current_location.filename,
             end_lineno: None,
             end_colno: None,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
-    pub fn not_node(token: Token, value: Node) -> Self {
-        let kind = NodeKind::NotNode {
-            value: Box::new(value),
-        };
-
-        Self {
+    pub fn not_node(token: Token, value: Box<Node>) -> Box<Self> {
+        let kind = NodeKind::NotNode { value };
+        Box::new(Self {
             lineno: token.lineno,
             colno: token.colno,
             filename: token.filename,
             end_lineno: None,
             end_colno: None,
             node_kind: kind,
-            value: None,
-        }
+        })
     }
 
-    pub fn arithmetic_node(operation: &str, left: Node, right: Node) -> Self {
+    pub fn arithmetic_node(operation: &str, left: Box<Node>, right: Box<Node>) -> Box<Self> {
+        let lineno = left.lineno;
+        let colno = left.colno;
+
         let kind = NodeKind::ArithmeticNode {
-            left: Box::new(left),
-            right: Box::new(right),
+            left,
+            right,
             operation: operation.to_string(),
         };
 
-        Node {
-            lineno: left.lineno,
-            colno: left.colno,
+        Box::new(Self {
+            lineno,
+            colno,
+            node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn comparison_node(ctype: &str, left: Node, right: Node) -> Self {
+    pub fn comparison_node(ctype: &str, left: Box<Node>, right: Box<Node>) -> Box<Self> {
+        let filename = left.filename.clone();
+        let lineno = left.lineno;
+        let colno = left.colno;
         let kind = NodeKind::ComparisonNode {
-            left: Box::new(left),
-            right: Box::new(right),
+            left,
+            right,
             ctype: ctype.to_string(),
         };
 
-        Node {
-            lineno: left.lineno,
-            colno: left.colno,
-            filename: left.filename,
+        Box::new(Self {
+            lineno,
+            colno,
+            filename,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn and_node(left: Node, right: Node) -> Self {
-        let kind = NodeKind::AndNode {
-            left: Box::new(left),
-            right: Box::new(right),
-        };
+    pub fn and_node(left: Box<Node>, right: Box<Node>) -> Box<Self> {
+        let lineno = left.lineno;
+        let colno = left.colno;
+        let kind = NodeKind::AndNode { left, right };
 
-        Self {
-            lineno: left.lineno,
-            colno: left.colno,
+        Box::new(Self {
+            lineno,
+            colno,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn or_node(left: Node, right: Node) -> Self {
-        let kind = NodeKind::OrNode {
-            left: Box::new(left),
-            right: Box::new(right),
-        };
+    pub fn or_node(left: Box<Node>, right: Box<Node>) -> Box<Self> {
+        let lineno = left.lineno;
+        let colno = left.colno;
 
-        Self {
-            lineno: left.lineno,
-            colno: left.colno,
+        let kind = NodeKind::OrNode { left, right };
+
+        Box::new(Self {
+            lineno,
+            colno,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
     pub fn plusassignment_node(
@@ -447,20 +467,17 @@ impl Node {
         lineno: i32,
         colno: i32,
         var_name: String,
-        value: Node,
-    ) -> Self {
-        let kind = NodeKind::PlusAssignmentNode {
-            var_name: var_name.to_string(),
-            value: Box::new(value),
-        };
+        value: Box<Node>,
+    ) -> Box<Self> {
+        let kind = NodeKind::PlusAssignmentNode { var_name, value };
 
-        Self {
+        Box::new(Self {
             lineno,
             colno,
             filename,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
     pub fn assignment_node(
@@ -468,42 +485,50 @@ impl Node {
         lineno: i32,
         colno: i32,
         var_name: String,
-        value: Node,
-    ) -> Self {
-        let kind = NodeKind::AssignmentNode {
-            var_name: var_name.to_string(),
-            value: Box::new(value),
-        };
+        value: Box<Node>,
+    ) -> Box<Self> {
+        let kind = NodeKind::AssignmentNode { var_name, value };
 
-        Self {
+        Box::new(Self {
             lineno,
             colno,
             filename,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn ternary_node(condition: Node, trueblock: Node, falseblock: Node) -> Self {
+    pub fn ternary_node(
+        condition: Box<Node>,
+        trueblock: Box<Node>,
+        falseblock: Box<Node>,
+    ) -> Box<Self> {
+        let filename = condition.filename.clone();
+        let lineno = condition.lineno;
+        let colno = condition.colno;
+
         let kind = NodeKind::TernaryNode {
-            condition: Box::new(condition),
-            trueblock: Box::new(trueblock),
-            falseblock: Box::new(falseblock),
+            condition,
+            trueblock,
+            falseblock,
         };
 
-        Self {
-            lineno: condition.lineno,
-            colno: condition.colno,
-            filename: condition.filename,
+        Box::new(Self {
+            lineno,
+            colno,
+            filename,
             node_kind: kind,
             ..Default::default()
-        }
+        })
     }
 
-    pub fn empty_node(lineno: i32, colno: i32, filename: String) -> Self {
-        Self {
+    pub fn empty_node(lineno: i32, colno: i32, filename: String) -> Box<Self> {
+        Box::new(Self {
+            lineno,
+            colno,
+            filename,
             node_kind: NodeKind::EmptyNode,
             ..Default::default()
-        }
+        })
     }
 }
