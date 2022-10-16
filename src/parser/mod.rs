@@ -295,9 +295,9 @@ impl Parser {
             let e = self.statement();
             self.block_expect(TokenType::RParen, &block_start);
             e
-        } else if self.accept(TokenType::LCurly) {
+        } else if self.accept(TokenType::LBrace) {
             let args = self.args();
-            self.block_expect(TokenType::RCurly, &block_start);
+            self.block_expect(TokenType::RBrace, &block_start);
             Node::array_node(
                 args,
                 block_start.lineno,
@@ -416,7 +416,7 @@ impl Parser {
             if self.accept(TokenType::Comma) {
                 if let NodeKind::ArgumentNode(ref mut a) = a.node_kind {
                     a.commas.push(potential);
-                    a.append(s.clone());
+                    a.append(s);
                 }
             } else if self.accept(TokenType::Colon) {
                 if !matches!(s.node_kind, NodeKind::IDNode { .. }) {
@@ -434,7 +434,7 @@ impl Parser {
                     arg_node.commas.push(potential);
                 }
             } else if let NodeKind::ArgumentNode(ref mut arg_node) = a.node_kind {
-                arg_node.append(s.clone());
+                arg_node.append(s);
                 return a;
             }
 
@@ -576,20 +576,62 @@ mod tests {
         let code = r#"
             project('test_proj', ['cpp'])
             
-            "#;
-        // a = dependency('dep')
-        // b = dependency('dep')
-        // c = dependency('dep')
-
-        // deps = [a, b, c]
-
-        // executable('exec', dependencies: deps)
+            a = dependency('dep')
+            deps = [a, b, c]
+            executable('exec', dependencies: deps)
+        "#;
 
         let mut p = Parser::new(code.to_string(), "parser_test".to_string());
         let c = p.parse();
         assert!(matches!(c.node_kind, NodeKind::CodeBlock { .. }));
-        if let NodeKind::CodeBlock { lines } = c.node_kind {
-            assert_eq!(lines.len(), 1);
+        let lines = if let NodeKind::CodeBlock { lines } = c.node_kind {
+            lines
+        } else {
+            unreachable!()
+        };
+        assert_eq!(lines.len(), 4);
+        let mut it = lines.into_iter();
+
+        let l = it.next().expect("Failed to get next line");
+
+        assert!(matches!(l.node_kind, NodeKind::FunctionNode { .. }));
+        if let NodeKind::FunctionNode { func_name, args } = l.node_kind {
+            assert_eq!(func_name, "project");
+            assert!(matches!(args.node_kind, NodeKind::ArgumentNode { .. }));
+            if let NodeKind::ArgumentNode(args) = args.node_kind {
+                assert_eq!(args.commas.len(), 1);
+                assert_eq!(args.arguments.len(), 2);
+
+                let mut it = args.arguments.into_iter();
+
+                let arg = it.next().expect("Expected a node");
+                assert!(matches!(arg.node_kind, NodeKind::StringNode { .. }));
+                if let NodeKind::StringNode { value } = arg.node_kind {
+                    assert_eq!(value, "test_proj");
+                }
+
+                let arg = it.next().expect("Expected another node");
+                assert!(matches!(arg.node_kind, NodeKind::ArrayNode { .. }));
+                if let NodeKind::ArrayNode { args } = arg.node_kind {
+                    let args = if let NodeKind::ArgumentNode(args) = args.node_kind {
+                        args
+                    } else {
+                        unreachable!()
+                    };
+
+                    assert_eq!(args.commas.len(), 0);
+
+                    assert_eq!(args.arguments.len(), 1);
+                    let arg = &args.arguments[0];
+                    assert!(matches!(arg.node_kind, NodeKind::StringNode { .. }));
+                    if let NodeKind::StringNode { value } = &arg.node_kind {
+                        assert_eq!(value, "cpp");
+                    }
+                }
+            }
         }
+
+        let l = it.next().expect("Expected another line");
+        assert!(matches!(l.node_kind, NodeKind::AssignmentNode { .. }));
     }
 }

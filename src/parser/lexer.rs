@@ -100,8 +100,20 @@ impl Lexer {
                     panic!("Double quotes not supported");
                 }
                 ',' => {
+                    self.advance(&mut code_slice);
                     return Token::new(
                         TokenType::Comma,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                ':' => {
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::Colon,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
@@ -486,7 +498,7 @@ mod tests {
                 ],
             },
             Test {
-                input: "project()",
+                input: "project('hello world', ['cpp'])",
                 expected: vec![
                     Token {
                         tid: TokenType::ID,
@@ -495,6 +507,31 @@ mod tests {
                     },
                     Token {
                         tid: TokenType::LParen,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::String,
+                        value: TokenValue::Str("hello world".to_string()),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::Comma,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::LBrace,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::String,
+                        value: TokenValue::Str("cpp".to_string()),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::RBrace,
                         value: TokenValue::None,
                         ..Default::default()
                     },

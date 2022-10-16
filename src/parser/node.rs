@@ -6,9 +6,9 @@ use super::token::Token;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct ArgumentNode {
-    arguments: Vec<Box<Node>>,
+    pub arguments: Vec<Box<Node>>,
     pub commas: Vec<Token>,
-    kwargs: BTreeMap<Box<Node>, Box<Node>>,
+    pub kwargs: BTreeMap<Box<Node>, Box<Node>>,
     order_error: bool,
 }
 
@@ -23,7 +23,7 @@ impl ArgumentNode {
     }
 
     pub fn append(&mut self, statement: Box<Node>) {
-        if self.kwargs.len() > 0 {
+        if !self.kwargs.is_empty() {
             self.order_error = true;
         }
 
