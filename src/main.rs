@@ -123,6 +123,8 @@ fn main() {
             let env = Environment::new(source_dir.clone(), build_dir.clone());
 
             debug!("Build Started at {}", Local::now());
+            debug!("Main Binary {:?}", std::env::current_exe());
+            debug!("Build Options: ");
             info!("Reson Build System");
             info!("Version: {}", VERSION);
             info!("Source Directory {:?}", source_dir);
@@ -132,6 +134,10 @@ fn main() {
 
             let mut interpreter =
                 Interpreter::new(build, None, None, None, None).expect("Should be constructed");
+            let build_machine = interpreter.builtin["build_machine"];
+            let host_machine = interpreter.builtin["host_machine"];
+            let target_machine = interpreter.builtin["target_machine"];
+
             interpreter.run();
         }
 

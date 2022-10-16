@@ -1,0 +1,7 @@
+{
+    "editor.formatOnSave": true,
+    "lldb.showDisassembly": "never",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands",
+    "lldb.displayFormat": "auto"
+}

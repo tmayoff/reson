@@ -21,7 +21,7 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
     assert!(build_dir.exists());
 
     // Cleanup
-    assert!(fs::remove_dir(build_dir).is_ok());
+    // assert!(fs::remove_dir(build_dir).is_ok());
 
     Ok(())
 }

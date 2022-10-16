@@ -14,5 +14,9 @@ impl Environment {
         }
     }
 
+    pub fn get_coredata(&self) -> String {
+        String::new()
+    }
+
     fn create_new_coredata() {}
 }

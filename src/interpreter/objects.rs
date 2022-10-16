@@ -1,5 +1,8 @@
 pub enum HoldableTypes {
     Dict,
+    VecBool(Vec<bool>),
+    VecInt(Vec<i32>),
+    VecStr(Vec<String>),
     Boolean(bool),
     Str(String),
     Int(i32),

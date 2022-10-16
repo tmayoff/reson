@@ -1,10 +1,12 @@
 mod objects;
 
 use core::panic;
+use std::path::PathBuf;
 use std::{collections::HashMap, fs};
 
 use crate::{
     build::Build,
+    environment::Environment,
     parser::node::Node,
     parser::{node::NodeKind, Parser},
     BUILD_FILE_NAME,
@@ -12,21 +14,22 @@ use crate::{
 
 use self::objects::{HoldableTypes, InterpreterObject};
 
-type FuncType =
-    Box<dyn Fn(&Node, Vec<HoldableTypes>, HashMap<String, HoldableTypes>) -> Option<HoldableTypes>>;
-
 #[derive(Default)]
 pub struct Interpreter {
     build: Build,
+    environment: Environment,
+    coredata: String,
+    summary: HashMap<String, String>,
+    options_file: PathBuf,
 
     subdir: String,
+    active_projectname: String,
     subproject: String,
     subproject_dir: String,
+    subproject_directory_name: String,
 
     current_lineno: i32,
     argument_depth: i32,
-
-    funcs: HashMap<String, FuncType>,
 
     ast: Option<Box<Node>>,
 }
@@ -40,6 +43,8 @@ impl Interpreter {
         subproject_dir: Option<String>,
     ) -> Result<Self, std::io::Error> {
         let mut s = Self {
+            coredata: build.environment.get_coredata(),
+            environment: build.environment.clone(),
             build,
             subdir: subdir.unwrap_or_default(),
             subproject: subproject.unwrap_or_default(),
@@ -172,15 +177,9 @@ impl Interpreter {
         let (h_posargs, h_kwargs) = self.reduce_arguments(args);
         let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
 
-        if self.funcs.contains_key(func_name) {
-            let func = self.funcs.get(func_name).expect("Expected function");
-            let func_args = posargs;
-            let res = (func)(node, func_args, kwargs);
-            res.map(|r| self.holderify(r))
-        } else {
-            Self::unknown_function_call(func_name);
-            None
-        }
+        let res = self.process_func(func_name.clone(), args, posargs, kwargs);
+
+        None
     }
 
     fn holderify(&self, value: HoldableTypes) -> InterpreterObject {
@@ -189,6 +188,9 @@ impl Interpreter {
             HoldableTypes::Str(str) => InterpreterObject::object_holder(HoldableTypes::Str(str)),
             HoldableTypes::Int(_) => todo!(),
             HoldableTypes::Dict => todo!(),
+            HoldableTypes::VecBool(_) => todo!(),
+            HoldableTypes::VecInt(_) => todo!(),
+            HoldableTypes::VecStr(_) => todo!(),
         }
     }
 
@@ -273,6 +275,80 @@ impl Interpreter {
         }
 
         String::new()
+    }
+
+    fn process_func(
+        &mut self,
+        func_name: String,
+        node: &Node,
+        posargs: Vec<HoldableTypes>,
+        kwargs: HashMap<String, HoldableTypes>,
+    ) -> Option<HoldableTypes> {
+        match func_name.as_str() {
+            "project" => {
+                self.func_project(node, posargs, kwargs);
+                return None;
+            }
+            _ => panic!("Unknown function"),
+        }
+    }
+
+    fn func_project(
+        &mut self,
+        node: &Node,
+        args: Vec<HoldableTypes>,
+        kwargs: HashMap<String, HoldableTypes>,
+    ) {
+        // Kwargs used in project function
+        struct ProjectKwargs {
+            version: Option<String>,
+            meson_version: Option<String>,
+            license: Vec<String>,
+            subproject_dir: String,
+        }
+        let mut project_args = ProjectKwargs {
+            version: None,
+            meson_version: None,
+            license: Vec::new(),
+            subproject_dir: String::new(),
+        };
+
+        assert!(
+            args.len() >= 2,
+            "project function requires at least 'project name' and 'language'"
+        );
+        assert!(matches!(args[0], HoldableTypes::Str(_)));
+        assert!(
+            matches!(args[1], HoldableTypes::Str(_)) || matches!(args[1], HoldableTypes::VecStr(_))
+        );
+
+        let project_name = if let HoldableTypes::Str(project_name) = &args[0] {
+            project_name.clone()
+        } else {
+            String::new()
+        };
+
+        let project_langs = if let HoldableTypes::Str(lang) = &args[1] {
+            vec![lang.clone()]
+        } else if let HoldableTypes::VecStr(langs) = &args[1] {
+            langs.clone()
+        } else {
+            Vec::new()
+        };
+
+        assert!(
+            !project_name.contains(':'),
+            "Project name can't contain ':'"
+        );
+
+        // TODO process meson_options.txt
+
+        if let HoldableTypes::Str(v) = &kwargs["version"] {
+            project_args.version = Some(v.clone());
+        }
+
+        info!("Project Name: {}", project_name);
+        info!("Project version: {:?}", project_args.version);
     }
 }
 
