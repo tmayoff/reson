@@ -1,4 +1,6 @@
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+use std::hash::Hash;
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenValue {
     None,
     Str(String),
@@ -6,7 +8,7 @@ pub enum TokenValue {
     Int(i32),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub enum TokenType {
     True,
     False,
@@ -30,13 +32,13 @@ pub enum TokenType {
     ID,
     Number,
     EolCont,
-    Eol,
+    EOL,
     MultilineString,
     Comment,
     LParen,
     RParen,
-    LBracket,
-    RBracket,
+    LCurly,
+    RCurly,
     LBrace,
     RBrace,
     DBLQuote,
@@ -61,7 +63,7 @@ pub enum TokenType {
     EOF,
 }
 
-#[derive(Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct Token {
     pub tid: TokenType,
     pub filename: String,
@@ -101,11 +103,5 @@ impl Token {
             colno,
             value,
         }
-    }
-}
-
-impl PartialEq for Token {
-    fn eq(&self, other: &Self) -> bool {
-        self.tid == other.tid
     }
 }

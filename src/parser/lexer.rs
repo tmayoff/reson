@@ -4,8 +4,6 @@ use std::str::Chars;
 
 use super::token::{Token, TokenType, TokenValue};
 
-
-
 pub struct Lexer {
     filename: String,
     code: String,
@@ -41,7 +39,6 @@ impl Lexer {
 
         let futur_keywords = vec!["return".to_string()];
 
-
         Lexer {
             filename,
             code,
@@ -72,24 +69,118 @@ impl Lexer {
     }
 
     pub fn lex(&mut self) -> Token {
-        let mut matched = false;
-        let mut value = TokenValue::None;
-
         let binding = self.code[self.loc..].to_string();
         let mut code_slice = binding.chars().peekable();
 
         while let Some(&c) = code_slice.peek() {
             match c {
+                '\n' => {
+                    self.advance(&mut code_slice);
+                    self.lineno += 1;
+                    self.consume_whitespace(&mut code_slice);
+                    return Token::new(
+                        TokenType::EOL,
+                        &self.filename,
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
                 '\t' | '#' => {
                     // Ignore / Comment
-                    // TODO skip line
+                    while let Some(c) = code_slice.peek() {
+                        if c == &'\n' {
+                            break;
+                        }
+                        self.advance(&mut code_slice);
+                    }
                 }
-                '(' => self.paren_count += 1,
-                ')' => self.paren_count -= 1,
-                '[' => self.bracket_count += 1,
-                ']' => self.bracket_count -= 1,
-                '{' => self.brace_count += 1,
-                '}' => self.brace_count -= 1,
+                '"' => {
+                    panic!("Double quotes not supported");
+                }
+                ',' => {
+                    return Token::new(
+                        TokenType::Comma,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                '(' => {
+                    self.paren_count += 1;
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::LParen,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                ')' => {
+                    self.paren_count -= 1;
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::RParen,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                '[' => {
+                    self.bracket_count += 1;
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::LBrace,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                ']' => {
+                    self.bracket_count -= 1;
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::RBrace,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                '{' => {
+                    self.brace_count += 1;
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::LCurly,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
+                '}' => {
+                    self.brace_count -= 1;
+                    self.advance(&mut code_slice);
+                    return Token::new(
+                        TokenType::RCurly,
+                        &self.filename.clone(),
+                        self.line_start as i32,
+                        self.lineno,
+                        0,
+                        TokenValue::None,
+                    );
+                }
                 '=' => {
                     self.advance(&mut code_slice);
                     if code_slice.peek() == Some(&'=') {
@@ -173,32 +264,20 @@ impl Lexer {
             }
         }
 
-
-        if !matched {
-            panic!("Failed to match with Token");
-        }
-
         Token::new(TokenType::Ignore, "", 0, 0, 0, TokenValue::None)
     }
 
     fn advance(&mut self, it: &mut Peekable<Chars>) -> Option<char> {
         self.loc += 1;
-        let c = it.next();
-
-        if let Some(c) = c {
-            if c == '\n' {
-                self.lineno += 1;
-            }
-        }
-
-        c
+        it.next()
     }
 
     fn get_int(&mut self, it: &mut Peekable<Chars>) -> i32 {
         let mut str = String::new();
-        while let Some(c) = self.advance(it) {
+        while let Some(c) = it.peek() {
             if c.is_numeric() {
-                str.push(c);
+                str.push(*c);
+                self.advance(it);
             } else {
                 break;
             }
@@ -209,12 +288,13 @@ impl Lexer {
 
     fn get_id(&mut self, it: &mut Peekable<Chars>) -> String {
         let mut str = String::new();
-        while let Some(c) = self.advance(it) {
-            if c == ' ' {
+        while let Some(c) = it.peek() {
+            if c.is_alphabetic() {
+                str.push(*c);
+                self.advance(it);
+            } else {
                 break;
             }
-
-            str.push(c);
         }
 
         str
@@ -237,9 +317,11 @@ impl Lexer {
         while let Some(c) = it.peek() {
             if !c.is_whitespace() {
                 break;
+            } else if c == &'\n' {
+                self.lineno += 1;
             }
 
-            it.next();
+            self.advance(it);
         }
     }
 }
@@ -280,6 +362,14 @@ mod tests {
                     ..Default::default()
                 },
             },
+            Test {
+                input: "#hello world",
+                expected: Token {
+                    tid: TokenType::Ignore,
+                    value: TokenValue::None,
+                    ..Default::default()
+                },
+            },
         ];
 
         for (index, test) in tests.iter().enumerate() {
@@ -295,6 +385,8 @@ mod tests {
                 "Test {}, TokenValue ({:?}) mismatch expected ({:?})",
                 index, t.value, test.expected.value
             );
+            let t = l.next();
+            assert_eq!(t.tid, TokenType::EOF);
         }
     }
 
@@ -341,6 +433,74 @@ mod tests {
                     Token {
                         tid: TokenType::Number,
                         value: TokenValue::Int(10),
+                        ..Default::default()
+                    },
+                ],
+            },
+            Test {
+                input: "\n10 == 10\na = 1\n",
+                expected: vec![
+                    Token {
+                        tid: TokenType::EOL,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::Number,
+                        value: TokenValue::Int(10),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::Equal,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::Number,
+                        value: TokenValue::Int(10),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::EOL,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::ID,
+                        value: TokenValue::Str("a".to_string()),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::Assign,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::Number,
+                        value: TokenValue::Int(1),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::EOL,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                ],
+            },
+            Test {
+                input: "project()",
+                expected: vec![
+                    Token {
+                        tid: TokenType::ID,
+                        value: TokenValue::Str("project".to_string()),
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::LParen,
+                        value: TokenValue::None,
+                        ..Default::default()
+                    },
+                    Token {
+                        tid: TokenType::RParen,
+                        value: TokenValue::None,
                         ..Default::default()
                     },
                 ],

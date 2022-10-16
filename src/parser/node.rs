@@ -352,7 +352,7 @@ impl Node {
         Box::new(Self {
             lineno: linenode.lineno,
             colno: linenode.colno,
-            filename: linenode.filename,
+            filename: linenode.filename.clone(),
             node_kind: kind,
             ..Default::default()
         })
