@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Environment {
     pub source_dir: PathBuf,
     pub build_dir: PathBuf,

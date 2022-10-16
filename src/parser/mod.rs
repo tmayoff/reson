@@ -1,5 +1,5 @@
 mod lexer;
-mod node;
+pub mod node;
 mod token;
 
 use std::collections::{BTreeMap, HashMap};

@@ -40,6 +40,10 @@ impl ArgumentNode {
     pub fn set_kwarg_no_check(&mut self, name: Box<Node>, value: Box<Node>) {
         self.kwargs.insert(name, value);
     }
+
+    pub fn incorrect_order(&self) -> bool {
+        self.order_error
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]

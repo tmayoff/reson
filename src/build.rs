@@ -1,5 +1,6 @@
 use crate::environment::Environment;
 
+#[derive(Default)]
 pub struct Build {
     project_name: String,
     project_version: Option<String>,

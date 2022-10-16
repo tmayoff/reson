@@ -130,7 +130,9 @@ fn main() {
 
             let build = Build::new(env);
 
-            let interpreter = Interpreter::new(build, None, None, None, None);
+            let mut interpreter =
+                Interpreter::new(build, None, None, None, None).expect("Should be constructed");
+            interpreter.run();
         }
 
         Commands::Compile {} => todo!(),
