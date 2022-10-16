@@ -50,8 +50,7 @@ impl Interpreter {
                 .unwrap_or_default(),
         );
 
-        let p = Parser::new(self.code.clone(), filename);
-        p.parse();
+        Parser::new(self.code.clone(), filename).parse();
 
         Ok(())
     }
