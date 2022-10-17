@@ -18,9 +18,7 @@ impl NinjaBackend {
 }
 
 impl Backend for NinjaBackend {
-    fn generate(&self) {
-        todo!()
-    }
+    fn generate(&self) {}
 
     fn get_name(&self) -> &String {
         &self.name
