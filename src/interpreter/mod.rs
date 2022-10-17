@@ -1,5 +1,8 @@
 mod objects;
 
+use crate::backend::NinjaBackend;
+use crate::compiler::Compiler;
+
 use core::panic;
 use std::path::PathBuf;
 use std::{collections::HashMap, fs};
@@ -14,14 +17,39 @@ use crate::{
 
 use self::objects::{HoldableTypes, InterpreterObject};
 
-#[derive(Default)]
+pub trait InterpreterTrait {
+    fn new(
+        build: Build,
+        backend: Option<String>,
+        subdir: Option<String>,
+        subproject: Option<String>,
+        subproject_dir: Option<String>,
+    ) -> Result<Self, std::io::Error>
+    where
+        Self: std::marker::Sized;
+
+    fn get_builtin(&self) -> &HashMap<String, InterpreterObject>;
+    fn get_sourceroot(&self) -> String;
+    fn get_funcs(&self) -> Vec<String>;
+
+    fn run(&mut self);
+
+    fn load_root_meson_file(&mut self) -> Result<(), std::io::Error>;
+
+    fn parse_project(&mut self);
+}
+
+#[derive(Default, Clone)]
 pub struct Interpreter {
     build: Build,
     environment: Environment,
+    pub backend: Option<NinjaBackend>,
     coredata: String,
     summary: HashMap<String, String>,
     options_file: PathBuf,
 
+    compilers: HashMap<String, Compiler>,
+    builtin: HashMap<String, InterpreterObject>,
     subdir: String,
     active_projectname: String,
     subproject: String,
@@ -34,8 +62,8 @@ pub struct Interpreter {
     ast: Option<Box<Node>>,
 }
 
-impl Interpreter {
-    pub fn new(
+impl InterpreterTrait for Interpreter {
+    fn new(
         build: Build,
         _backend: Option<String>,
         subdir: Option<String>,
@@ -49,17 +77,32 @@ impl Interpreter {
             subdir: subdir.unwrap_or_default(),
             subproject: subproject.unwrap_or_default(),
             subproject_dir: subproject_dir.unwrap_or_else(|| String::from("subprojects")),
-            current_lineno: 0,
-            ast: None,
             ..Default::default()
         };
+
+        s.builtin.insert(
+            String::from("meson"),
+            InterpreterObject::meson_main(s.build.clone(), Box::new(s.clone())),
+        );
 
         s.load_root_meson_file()?;
         s.sanity_check_ast();
 
         s.parse_project();
 
+        s.redetect_machines();
+
         Ok(s)
+    }
+
+    fn get_builtin(&self) -> &HashMap<String, InterpreterObject> {
+        &self.builtin
+    }
+
+    fn run(&mut self) {
+        if let Some(ast) = self.ast.clone() {
+            self.evaluate_codeblock(&ast, Some(1), None);
+        }
     }
 
     fn load_root_meson_file(&mut self) -> Result<(), std::io::Error> {
@@ -82,6 +125,26 @@ impl Interpreter {
         Ok(())
     }
 
+    fn parse_project(&mut self) {
+        if let Some(ast) = self.ast.clone() {
+            self.evaluate_codeblock(&ast, None, Some(1));
+        }
+    }
+
+    fn get_sourceroot(&self) -> String {
+        todo!()
+    }
+
+    fn get_funcs(&self) -> Vec<String> {
+        todo!()
+    }
+}
+
+impl Interpreter {
+    fn redetect_machines(&mut self) {
+        // let machines = self.build.environment.machines;
+    }
+
     fn sanity_check_ast(&mut self) {
         assert!(self.ast.is_some());
         if let Some(ast) = &self.ast {
@@ -95,25 +158,14 @@ impl Interpreter {
         }
     }
 
-    fn parse_project(&mut self) {
-        if let Some(ast) = self.ast.clone() {
-            self.evaluate_codeblock(ast, None, Some(1));
-        }
-    }
-
-    pub fn run(&mut self) {
-        //
-    }
-
-    fn evaluate_codeblock(&mut self, node: Box<Node>, start: Option<usize>, end: Option<usize>) {
-        let lines = if let NodeKind::CodeBlock { lines } = node.node_kind {
-            lines
-        } else {
-            Vec::new()
+    fn evaluate_codeblock(&mut self, node: &Node, start: Option<usize>, end: Option<usize>) {
+        let lines = match &node.node_kind {
+            NodeKind::CodeBlock { lines } => lines,
+            _ => return,
         };
 
         let start = start.unwrap_or(0) as usize;
-        let end = end.unwrap_or(lines.len() - 1);
+        let end = end.unwrap_or(lines.len());
         let statements = &lines.as_slice()[start..end];
         for curr in statements {
             self.current_lineno = curr.lineno;
@@ -349,6 +401,16 @@ impl Interpreter {
 
         info!("Project Name: {}", project_name);
         info!("Project version: {:?}", project_args.version);
+
+        self.set_backend();
+    }
+
+    fn set_backend(&mut self) {
+        if self.backend.is_some() {
+            return;
+        }
+
+        self.backend = Some(NinjaBackend::new());
     }
 }
 

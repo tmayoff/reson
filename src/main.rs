@@ -7,13 +7,16 @@ use std::{env::current_dir, path::Path, path::PathBuf};
 use chrono::prelude::*;
 use clap::{Parser, Subcommand};
 
+mod backend;
 mod build;
+mod compiler;
 mod environment;
 mod interpreter;
 mod parser;
+use crate::backend::Backend;
 use crate::build::Build;
 use crate::environment::Environment;
-use crate::interpreter::Interpreter;
+use crate::interpreter::{Interpreter, InterpreterTrait};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_FILE_NAME: &str = "meson.build";
@@ -120,7 +123,8 @@ fn main() {
             let (source_dir, build_dir) = validate_dirs(build_dir.to_owned(), None, false, false)
                 .expect("Failed to validate dirs");
 
-            let env = Environment::new(source_dir.clone(), build_dir.clone());
+            let env = Environment::new(source_dir.clone(), Some(&build_dir))
+                .expect("Failed to setup environment");
 
             debug!("Build Started at {}", Local::now());
             debug!("Main Binary {:?}", std::env::current_exe());
@@ -134,11 +138,13 @@ fn main() {
 
             let mut interpreter =
                 Interpreter::new(build, None, None, None, None).expect("Should be constructed");
-            let build_machine = interpreter.builtin["build_machine"];
-            let host_machine = interpreter.builtin["host_machine"];
-            let target_machine = interpreter.builtin["target_machine"];
+            // let build_machine = interpreter.get_builtin()["build_machine"].clone();
+            // let host_machine = interpreter.get_builtin()["host_machine"].clone();
+            // let target_machine = interpreter.get_builtin()["target_machine"].clone();
 
             interpreter.run();
+
+            interpreter.backend.expect("No backend ").generate();
         }
 
         Commands::Compile {} => todo!(),
