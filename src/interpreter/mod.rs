@@ -1,7 +1,8 @@
 mod objects;
 
-use crate::backend::NinjaBackend;
+use crate::backend::ninja::NinjaBackend;
 use crate::compiler::Compiler;
+use crate::coredata::CoreData;
 
 use core::panic;
 use std::path::PathBuf;
@@ -44,7 +45,7 @@ pub struct Interpreter {
     build: Build,
     environment: Environment,
     pub backend: Option<NinjaBackend>,
-    coredata: String,
+    coredata: CoreData,
     summary: HashMap<String, String>,
     options_file: PathBuf,
 
@@ -71,7 +72,7 @@ impl InterpreterTrait for Interpreter {
         subproject_dir: Option<String>,
     ) -> Result<Self, std::io::Error> {
         let mut s = Self {
-            coredata: build.environment.get_coredata(),
+            coredata: build.environment.get_coredata().clone(),
             environment: build.environment.clone(),
             build,
             subdir: subdir.unwrap_or_default(),
@@ -410,7 +411,7 @@ impl Interpreter {
             return;
         }
 
-        self.backend = Some(NinjaBackend::new());
+        self.backend = Some(NinjaBackend::new(&self.environment));
     }
 }
 
