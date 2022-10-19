@@ -3,8 +3,6 @@ use std::fs::File;
 use std::io::Write;
 use std::{fmt::Display, fs};
 
-use strum::IntoEnumIterator;
-
 use crate::compiler::Compiler;
 use crate::environment::{self, Environment};
 use crate::utils::{MachineChoice, PerMachine};
@@ -42,19 +40,30 @@ struct NinjaCommandArg {
 
 #[derive(Clone, Default)]
 struct NinjaRule {
-    rulename: String,
+    pub rulename: String,
     command: Vec<NinjaCommandArg>,
     args: Vec<NinjaCommandArg>,
     description: String,
+    deps: Option<String>,
+    depfile: Option<String>,
 }
 
 impl NinjaRule {
-    fn new(rule: &str, command: &[String], args: &[String], description: &str) -> Self {
+    fn new(
+        rule: &str,
+        command: &[String],
+        args: &[String],
+        description: &str,
+        deps: Option<&str>,
+        depfile: Option<&str>,
+    ) -> Self {
         Self {
             rulename: rule.to_owned(),
             command: command.iter().map(Self::string_to_command_arg).collect(),
             args: args.iter().map(Self::string_to_command_arg).collect(),
             description: description.to_owned(),
+            deps: deps.map(|s| s.to_owned()),
+            depfile: depfile.map(|s| s.to_string()),
         }
     }
 
@@ -125,7 +134,25 @@ impl Display for NinjaObject {
             NinjaObject::Rule(r) => {
                 writeln!(f, "rule {}", r.rulename)?;
                 let command_args: Vec<String> = r.command.iter().map(Self::quoter).collect();
-                writeln!(f, " command = {}\n", command_args.join(" "))
+                let args: Vec<String> = r.args.iter().map(Self::quoter).collect();
+                writeln!(
+                    f,
+                    " command = {} {}",
+                    command_args.join(" "),
+                    args.join(" ")
+                )?;
+
+                if let Some(deps) = &r.deps {
+                    writeln!(f, " deps = {}", deps)?;
+                }
+
+                if let Some(depfile) = &r.depfile {
+                    writeln!(f, " depfile = {}", depfile)?;
+                }
+
+                writeln!(f, " description = {}", r.description)?;
+
+                writeln!(f)
             }
         }
     }
@@ -207,8 +234,18 @@ impl NinjaBackend {
         self.rules.push(comment);
     }
 
-    fn add_rule(&mut self, rule: NinjaObject) {
-        self.rules.push(rule);
+    fn add_rule(&mut self, rule: &NinjaObject) {
+        match rule {
+            NinjaObject::Comment(_) => unreachable!(),
+            NinjaObject::Rule(nrule) => {
+                if self.rule_dict.contains_key(&nrule.rulename) {
+                    return;
+                }
+                self.rules.push(rule.to_owned());
+                self.rule_dict
+                    .insert(nrule.rulename.to_owned(), rule.to_owned());
+            }
+        }
     }
 
     fn generate_scanner_rules(&mut self) {
@@ -227,11 +264,13 @@ impl NinjaBackend {
             String::from("$in"),
         ];
         let description = String::from("Module Scanner");
-        self.add_rule(NinjaObject::Rule(NinjaRule::new(
+        self.add_rule(&NinjaObject::Rule(NinjaRule::new(
             rulename,
             &command,
             &args,
             &description,
+            None,
+            None,
         )));
     }
 
@@ -241,7 +280,7 @@ impl NinjaBackend {
         // for (lang, compiler) in &clist[&machine] {
         // if compiler.get_id() == "clang" {}
         let lang = "cpp";
-        let compiler = Compiler::new(vec!["gcc".to_owned()], "");
+        let compiler = Compiler::new(vec!["/usr/bin/g++".to_owned()], "");
         self.generate_compile_rules_for(lang, compiler);
         // self.generate_pch_rule_for(lang, compiler);
         // }
@@ -252,15 +291,19 @@ impl NinjaBackend {
         let rule = self.get_compiler_rule_name(lang, MachineChoice::Host);
         let command = compiler.get_exelist();
 
-        let binding = Vec::from(["".to_string()]);
+        let binding = Vec::from(["$ARGS".to_string()]);
         let args = binding.as_slice();
-        let description = format!("Compiling object");
+        let description = format!("Compiling object {} object $out", "C++");
+        let deps = "gcc";
+        let depfile = "$DEPFILE";
 
-        self.add_rule(NinjaObject::Rule(NinjaRule::new(
+        self.add_rule(&NinjaObject::Rule(NinjaRule::new(
             &rule,
             command,
             args,
             &description,
+            Some(deps),
+            Some(depfile),
         )));
     }
 
