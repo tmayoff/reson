@@ -1,6 +1,8 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::coredata::CoreData;
+use crate::{coredata::CoreData, utils::MachineChoice};
+use lazy_static::lazy_static;
+use strum::IntoEnumIterator;
 
 const PRIVATE_DIR: &str = "meson-private";
 const LOG_DIR: &str = "meson-logs";
@@ -16,6 +18,8 @@ pub struct Environment {
     scratch_dir: PathBuf,
     info_dir: PathBuf,
     log_dir: PathBuf,
+
+    binaries: HashMap<MachineChoice, HashMap<String, String>>,
 }
 
 impl Environment {
@@ -41,6 +45,8 @@ impl Environment {
 
             // env.core_data = coredata.load(env.get_build_dir());
         }
+
+        env.set_default_binaries_from_env();
 
         Ok(env)
     }
@@ -68,5 +74,29 @@ impl Environment {
         &self.coredata
     }
 
+    fn set_default_binaries_from_env(&mut self) {
+        // for machine in MachineChoice::iter() {
+        //     for (name, evar) in ENV_VAR_COMPILER_MAP.into_iter() {
+        //         let attemp = std::env::var(name);
+        //         if let Ok(var) = attemp {
+        //             self.binaries[&machine].insert(name.to_owned(), var);
+        //         }
+        //     }
+        // }
+    }
+
     fn create_new_coredata() {}
+
+    pub fn lookup_binary_entry(&self, machine: MachineChoice, name: &str) -> Option<&String> {
+        if self.binaries[&machine].contains_key(name) {
+            return Some(&self.binaries[&machine][name]);
+        }
+
+        None
+    }
+}
+
+lazy_static! {
+    static ref ENV_VAR_COMPILER_MAP: HashMap<&'static str, &'static str> =
+        HashMap::from([("c", "CC"), ("cpp", "CXX"),]);
 }

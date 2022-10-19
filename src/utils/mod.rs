@@ -13,18 +13,18 @@ pub struct PerMachine<T> {
 }
 
 impl<T> PerMachine<T> {
-    fn new(build: T, host: T) -> Self {
+    pub fn new(build: T, host: T) -> Self {
         Self { build, host }
     }
 
-    fn getitem(&self, machine: MachineChoice) -> &T {
+    pub fn getitem(&self, machine: MachineChoice) -> &T {
         match machine {
             MachineChoice::Build => &self.build,
             MachineChoice::Host => &self.host,
         }
     }
 
-    fn setitem(&mut self, machine: MachineChoice, val: T) {
+    pub fn setitem(&mut self, machine: MachineChoice, val: T) {
         match machine {
             MachineChoice::Build => self.build = val,
             MachineChoice::Host => self.host = val,

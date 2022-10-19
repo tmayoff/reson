@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::compiler::Compiler;
 use crate::utils::MachineChoice;
@@ -10,6 +10,8 @@ pub struct CoreData {
     lang_guids: HashMap<String, String>,
 
     compilers: CompilersType,
+    // initialized_subprojects:
+    deps: HashMap<MachineChoice, DependencyCache>,
 }
 
 impl CoreData {
@@ -37,13 +39,20 @@ impl CoreData {
             ),
         ]);
 
-        Self {
+        let coredata = Self {
             lang_guids,
             ..Default::default()
-        }
+        };
+
+        //
+
+        coredata
     }
 
     pub fn get_compilers(&self) -> &CompilersType {
         &self.compilers
     }
 }
+
+#[derive(Clone)]
+struct DependencyCache {}

@@ -3,6 +3,7 @@ mod objects;
 use crate::backend::ninja::NinjaBackend;
 use crate::compiler::Compiler;
 use crate::coredata::CoreData;
+use crate::utils::MachineChoice;
 
 use core::panic;
 use std::path::PathBuf;
@@ -403,6 +404,9 @@ impl Interpreter {
         info!("Project Name: {}", project_name);
         info!("Project version: {:?}", project_args.version);
 
+        self.add_languages(&project_langs, true, MachineChoice::Host);
+        self.add_languages(&project_langs, false, MachineChoice::Build);
+
         self.set_backend();
     }
 
@@ -412,6 +416,26 @@ impl Interpreter {
         }
 
         self.backend = Some(NinjaBackend::new(&self.environment));
+    }
+
+    fn add_languages(
+        &mut self,
+        langs: &Vec<String>,
+        required: bool,
+        for_machine: MachineChoice,
+    ) -> bool {
+        match for_machine {
+            MachineChoice::Build => {
+                for lang in langs {
+                    // Compilers::detec_compiler_for(&self.environment, lang, for_machine);
+                }
+            }
+            MachineChoice::Host => {
+                //
+            }
+        }
+
+        false
     }
 }
 
