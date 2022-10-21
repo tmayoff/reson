@@ -1,5 +1,9 @@
-use assert_cmd::prelude::*;
-use std::{fs, process::Command};
+use assert_cmd::{assert, prelude::*};
+use file_diff::diff_files;
+use std::{
+    fs::{self, File},
+    process::Command,
+};
 
 #[test]
 fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
@@ -19,6 +23,13 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
     let mut build_dir = cwd;
     build_dir.push("build");
     assert!(build_dir.exists());
+
+    // let mut generated = File::open("tests/build_scripts/simple/build/build.ninja")
+    //     .expect("Couldn't open generated build file");
+    // let mut real =
+    //     File::open("tests/build_scripts/simple/build.ninja").expect("Failed to open truth file");
+
+    // assert!(diff_files(&mut generated, &mut real));
 
     // Cleanup
     let rm_build_dir = fs::remove_dir_all(build_dir);

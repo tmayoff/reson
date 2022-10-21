@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::Write;
 use std::{fmt::Display, fs};
 
+use strum::IntoEnumIterator;
+
 use crate::compiler::Compiler;
 use crate::environment::{self, Environment};
 use crate::utils::{MachineChoice, PerMachine};
@@ -38,6 +40,11 @@ struct NinjaCommandArg {
     quoting: Quoting,
 }
 
+enum Command {
+    String(String),
+    CommandArg(NinjaCommandArg),
+}
+
 #[derive(Clone, Default)]
 struct NinjaRule {
     pub rulename: String,
@@ -46,62 +53,76 @@ struct NinjaRule {
     description: String,
     deps: Option<String>,
     depfile: Option<String>,
+    extra: Option<String>,
 }
 
 impl NinjaRule {
     fn new(
         rule: &str,
-        command: &[String],
-        args: &[String],
+        command: &[Command],
+        args: &[Command],
         description: &str,
         deps: Option<&str>,
         depfile: Option<&str>,
+        extra: Option<&str>,
     ) -> Self {
+        let depfile = depfile.map(|s| {
+            if s == "$DEPFILE" {
+                format!("{}_UNQUOTED", s)
+            } else {
+                s.to_string()
+            }
+        });
+
         Self {
             rulename: rule.to_owned(),
             command: command.iter().map(Self::string_to_command_arg).collect(),
             args: args.iter().map(Self::string_to_command_arg).collect(),
             description: description.to_owned(),
             deps: deps.map(|s| s.to_owned()),
-            depfile: depfile.map(|s| s.to_string()),
+            depfile,
+            extra: extra.map(|s| s.to_owned()),
         }
     }
 
-    fn string_to_command_arg(c: &String) -> NinjaCommandArg {
-        if c == "&&" {
-            return NinjaCommandArg {
-                arg: c.clone(),
-                quoting: Quoting::NotShell,
-            };
-        } else if c.starts_with('$') {
-            let reg = regex::Regex::new(r"\$\{?(\w*)\}?").expect("Failed to buld regex");
-            let group = reg.captures(c);
-            match group {
-                Some(capture) => {
-                    if capture.len() > 1 && RAW_NAMES.contains(&&capture[1]) {
-                        return NinjaCommandArg {
-                            arg: c.clone(),
-                            quoting: Quoting::None,
-                        };
-                    } else {
-                        return NinjaCommandArg {
-                            arg: c.clone(),
-                            quoting: Quoting::NotNinja,
-                        };
+    fn string_to_command_arg(c: &Command) -> NinjaCommandArg {
+        match c {
+            Command::String(c) => {
+                if c == "&&" {
+                    NinjaCommandArg {
+                        arg: c.to_owned(),
+                        quoting: Quoting::NotShell,
                     }
-                }
-                None => {
-                    return NinjaCommandArg {
-                        arg: c.clone(),
-                        quoting: Quoting::NotNinja,
+                } else if c.starts_with('$') {
+                    let reg = regex::Regex::new(r"\$\{?(\w*)\}?").expect("Failed to buld regex");
+                    let group = reg.captures(c);
+                    match group {
+                        Some(capture) => {
+                            if capture.len() > 1 && RAW_NAMES.contains(&&capture[1]) {
+                                NinjaCommandArg {
+                                    arg: c.to_owned(),
+                                    quoting: Quoting::None,
+                                }
+                            } else {
+                                NinjaCommandArg {
+                                    arg: c.to_owned(),
+                                    quoting: Quoting::NotNinja,
+                                }
+                            }
+                        }
+                        None => NinjaCommandArg {
+                            arg: c.to_owned(),
+                            quoting: Quoting::NotNinja,
+                        },
+                    }
+                } else {
+                    NinjaCommandArg {
+                        arg: c.to_owned(),
+                        quoting: Quoting::Both,
                     }
                 }
             }
-        }
-
-        NinjaCommandArg {
-            arg: c.clone(),
-            ..Default::default()
+            Command::CommandArg(c) => c.to_owned(),
         }
     }
 }
@@ -124,8 +145,7 @@ impl Display for NinjaObject {
             NinjaObject::Comment(comment) => {
                 for l in comment.split('\n') {
                     write!(f, "# ")?;
-                    write!(f, "{}", l)?;
-                    writeln!(f)?;
+                    writeln!(f, "{}", l)?
                 }
 
                 writeln!(f)
@@ -133,14 +153,10 @@ impl Display for NinjaObject {
 
             NinjaObject::Rule(r) => {
                 writeln!(f, "rule {}", r.rulename)?;
-                let command_args: Vec<String> = r.command.iter().map(Self::quoter).collect();
-                let args: Vec<String> = r.args.iter().map(Self::quoter).collect();
-                writeln!(
-                    f,
-                    " command = {} {}",
-                    command_args.join(" "),
-                    args.join(" ")
-                )?;
+                let mut command: Vec<String> = r.command.iter().map(Self::quoter).collect();
+                command.append(&mut r.args.iter().map(Self::quoter).collect());
+
+                writeln!(f, " command = {}", command.join(" "))?;
 
                 if let Some(deps) = &r.deps {
                     writeln!(f, " deps = {}", deps)?;
@@ -151,6 +167,13 @@ impl Display for NinjaObject {
                 }
 
                 writeln!(f, " description = {}", r.description)?;
+
+                if let Some(extra) = &r.extra {
+                    for l in extra.split("\n") {
+                        write!(f, " ")?;
+                        writeln!(f, "{}", l)?;
+                    }
+                }
 
                 writeln!(f)
             }
@@ -185,14 +208,16 @@ impl Backend for NinjaBackend {
         let mut file = File::create(&tmpfilename)
             .unwrap_or_else(|_| panic!("Failed to create file {:?}", tmpfilename));
 
-        writeln!(&mut file, "# This is the build file for project ")
+        writeln!(&mut file, "# This is the build file for project \"reson\"")
             .expect("Failed to write to tmp file");
         writeln!(
             &mut file,
-            "# This is autogenerated by the reson build system "
+            "# It is autogenerated by the reson build system."
         )
         .expect("Failed to write to tmp file");
-        writeln!(&mut file, "# Do not edit by hand\n").expect("Failed to write to tmp file");
+        writeln!(&mut file, "# Do not edit by hand.\n").expect("Failed to write to tmp file");
+        writeln!(&mut file, "ninja_required_version = 1.8.2\n")
+            .expect("Failed to write to tmp file");
 
         // generate rules
         self.generate_rules();
@@ -214,20 +239,51 @@ impl Backend for NinjaBackend {
 impl NinjaBackend {
     fn write_rules(&self, outfile: &mut File) {
         for r in &self.rules {
-            write!(outfile, "{}", r);
+            write!(outfile, "{}", r).expect("Failed to write to file");
         }
     }
 
     fn generate_rules(&mut self) {
         self.add_rule_comment(NinjaObject::Comment(String::from(
-            "Rules for modules scanning",
+            "Rules for module scanning.",
         )));
         // self.generate_scanner_rules();
-        self.add_rule_comment(NinjaObject::Comment(String::from("Rules for compiling")));
+        self.add_rule_comment(NinjaObject::Comment(String::from("Rules for compiling.")));
         self.generate_compiler_rules();
-        self.add_rule_comment(NinjaObject::Comment(String::from("Rules for linking")));
+        self.add_rule_comment(NinjaObject::Comment(String::from("Rules for linking.")));
         // self.generate_static_link_rules();
-        // self.generate_dynamic_link_rules();
+        self.generate_dynamic_link_rules();
+        self.add_rule_comment(NinjaObject::Comment(String::from("Other rules")));
+
+        self.add_rule(&NinjaObject::Rule(NinjaRule::new(
+            "CUSTOM_COMMAND",
+            &[Command::String("$COMMAND".to_string())],
+            &Vec::new(),
+            "$DESC",
+            None,
+            None,
+            Some("restat = 1"),
+        )));
+
+        self.add_rule(&NinjaObject::Rule(NinjaRule::new(
+            "CUSTOM_COMMAND_DEP",
+            &[Command::String("$COMMAND".to_string())],
+            &Vec::new(),
+            "$DESC",
+            Some("gcc"),
+            Some("$DEPFILE"),
+            Some("restat = 1"),
+        )));
+
+        self.add_rule(&NinjaObject::Rule(NinjaRule::new(
+            "REGENERATE_BUILD",
+            &[Command::String("".to_string())],
+            &Vec::new(),
+            "Regenerate build files.",
+            None,
+            None,
+            None,
+        )));
     }
 
     fn add_rule_comment(&mut self, comment: NinjaObject) {
@@ -254,14 +310,18 @@ impl NinjaBackend {
             return;
         }
 
-        let mut command = Environment::get_build_command();
-        command.push(String::from("--internal"));
-        command.push(String::from("depscan"));
+        let mut command: Vec<Command> = Environment::get_build_command()
+            .iter()
+            .map(|c| Command::String(c.to_owned()))
+            .collect();
+
+        command.push(Command::String("--internal".to_owned()));
+        command.push(Command::String("depscan".to_owned()));
 
         let args = vec![
-            String::from("$pickfile"),
-            String::from("$out"),
-            String::from("$in"),
+            Command::String("$pickfile".to_owned()),
+            Command::String("$out".to_owned()),
+            Command::String("$in".to_owned()),
         ];
         let description = String::from("Module Scanner");
         self.add_rule(&NinjaObject::Rule(NinjaRule::new(
@@ -269,6 +329,7 @@ impl NinjaBackend {
             &command,
             &args,
             &description,
+            None,
             None,
             None,
         )));
@@ -280,30 +341,99 @@ impl NinjaBackend {
         // for (lang, compiler) in &clist[&machine] {
         // if compiler.get_id() == "clang" {}
         let lang = "cpp";
-        let compiler = Compiler::new(vec!["/usr/bin/g++".to_owned()], "");
+        let compiler = Compiler::new(vec!["/usr/bin/clang++".to_owned()], "");
         self.generate_compile_rules_for(lang, compiler);
         // self.generate_pch_rule_for(lang, compiler);
         // }
         // }
     }
 
+    fn generate_static_link_rules(&mut self) {
+        for machine in MachineChoice::iter() {
+            let static_linker = "/usr/bin/ldd";
+            let rule = format!("STATIC_LINKER{}", self.get_rule_suffix(machine));
+            let mut cmdlist = Vec::new();
+            let args = vec![Command::String("$in".to_string())];
+
+            cmdlist.push(Command::String(static_linker.to_string()));
+            cmdlist.push(Command::String("$LINK_ARGS".to_string()));
+            cmdlist.push(Command::CommandArg(NinjaCommandArg {
+                arg: "$out".to_owned(),
+                quoting: Quoting::None,
+            }));
+
+            let description = String::from("Linking target $out");
+
+            self.add_rule(&NinjaObject::Rule(NinjaRule::new(
+                rule.as_str(),
+                &cmdlist,
+                &args,
+                &description,
+                None,
+                None,
+                None,
+            )));
+        }
+    }
+
+    fn generate_dynamic_link_rules(&mut self) {
+        // for machine in MachineChoice::iter() {
+        let langname = "cpp";
+        let rule = format!(
+            "{}_LINKER{}",
+            langname,
+            self.get_rule_suffix(MachineChoice::Host)
+        );
+        let command = Command::String("/usr/bin/clang++".to_string());
+
+        let args = vec![
+            Command::String("$ARGS".to_string()),
+            Command::CommandArg(NinjaCommandArg {
+                arg: "-o $out".to_string(),
+                quoting: Quoting::None,
+            }),
+            Command::String("$in".to_string()),
+            Command::String("$LINK_ARGS".to_string()),
+        ];
+
+        let description = "Linking target $out".to_string();
+
+        let rule = NinjaRule::new(
+            rule.as_str(),
+            &[command],
+            &args,
+            &description,
+            None,
+            None,
+            None,
+        );
+
+        self.add_rule(&NinjaObject::Rule(rule));
+        // }
+    }
+
     fn generate_compile_rules_for(&mut self, lang: &str, compiler: Compiler) {
         let rule = self.get_compiler_rule_name(lang, MachineChoice::Host);
-        let command = compiler.get_exelist();
+        let command: Vec<Command> = compiler
+            .get_exelist()
+            .iter()
+            .map(|c| Command::String(c.to_owned()))
+            .collect();
 
-        let binding = Vec::from(["$ARGS".to_string()]);
+        let binding = Vec::from([Command::String("$ARGS".to_string())]);
         let args = binding.as_slice();
-        let description = format!("Compiling object {} object $out", "C++");
+        let description = format!("Compiling {} object $out", "C++");
         let deps = "gcc";
         let depfile = "$DEPFILE";
 
         self.add_rule(&NinjaObject::Rule(NinjaRule::new(
             &rule,
-            command,
+            &command,
             args,
             &description,
             Some(deps),
             Some(depfile),
+            None,
         )));
     }
 
