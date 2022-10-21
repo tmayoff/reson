@@ -1,6 +1,7 @@
 mod objects;
 
 use crate::backend::ninja::NinjaBackend;
+use crate::backend::Backend;
 use crate::compiler::Compiler;
 use crate::coredata::CoreData;
 use crate::utils::MachineChoice;
@@ -397,11 +398,13 @@ impl Interpreter {
 
         // TODO process meson_options.txt
 
+        self.build.project_name = project_name.clone();
+
         if let HoldableTypes::Str(v) = &kwargs["version"] {
             project_args.version = Some(v.clone());
         }
 
-        info!("Project Name: {}", project_name);
+        info!("Project Name: {}", &project_name);
         info!("Project version: {:?}", project_args.version);
 
         self.add_languages(&project_langs, true, MachineChoice::Host);
@@ -415,7 +418,7 @@ impl Interpreter {
             return;
         }
 
-        self.backend = Some(NinjaBackend::new(&self.environment));
+        self.backend = Some(NinjaBackend::new(&self.build, self));
     }
 
     fn add_languages(
