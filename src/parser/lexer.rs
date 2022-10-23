@@ -1,8 +1,13 @@
-use core::panic;
 use std::iter::Peekable;
 use std::str::Chars;
 
 use super::token::{Token, TokenType, TokenValue};
+
+#[derive(Debug)]
+pub enum LexError {
+    UnknownToken,
+    DoubleQuoteNotSupported,
+}
 
 pub struct Lexer {
     filename: String,
@@ -53,22 +58,22 @@ impl Lexer {
         }
     }
 
-    pub fn next(&mut self) -> Token {
+    pub fn next(&mut self) -> Result<Token, LexError> {
         if self.loc >= self.code.len() {
-            return Token::new(
+            return Ok(Token::new(
                 TokenType::EOF,
                 &self.filename,
                 self.line_start as i32,
                 self.lineno,
                 0,
                 TokenValue::None,
-            );
+            ));
         }
 
         self.lex()
     }
 
-    pub fn lex(&mut self) -> Token {
+    pub fn lex(&mut self) -> Result<Token, LexError> {
         let binding = self.code[self.loc..].to_string();
         let mut code_slice = binding.chars().peekable();
 
@@ -78,14 +83,14 @@ impl Lexer {
                     self.advance(&mut code_slice);
                     self.lineno += 1;
                     self.consume_whitespace(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::EOL,
                         &self.filename,
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '\t' | '#' => {
                     // Ignore / Comment
@@ -96,137 +101,135 @@ impl Lexer {
                         self.advance(&mut code_slice);
                     }
                 }
-                '"' => {
-                    panic!("Double quotes not supported");
-                }
+                '"' => return Err(LexError::DoubleQuoteNotSupported),
                 ',' => {
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::Comma,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 ':' => {
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::Colon,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '(' => {
                     self.paren_count += 1;
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::LParen,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 ')' => {
                     self.paren_count -= 1;
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::RParen,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '[' => {
                     self.bracket_count += 1;
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::LBrace,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 ']' => {
                     self.bracket_count -= 1;
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::RBrace,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '{' => {
                     self.brace_count += 1;
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::LCurly,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '}' => {
                     self.brace_count -= 1;
                     self.advance(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::RCurly,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '=' => {
                     self.advance(&mut code_slice);
                     if code_slice.peek() == Some(&'=') {
                         self.advance(&mut code_slice);
-                        return Token::new(
+                        return Ok(Token::new(
                             TokenType::Equal,
                             &self.filename.clone(),
                             self.line_start as i32,
                             self.lineno,
                             0,
                             TokenValue::None,
-                        );
+                        ));
                     }
 
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::Assign,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::None,
-                    );
+                    ));
                 }
                 '\'' => {
                     self.advance(&mut code_slice);
                     let str = self.get_string(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::String,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::Str(str),
-                    );
+                    ));
                 }
                 c if c.is_whitespace() => {
                     self.consume_whitespace(&mut code_slice);
@@ -239,44 +242,44 @@ impl Lexer {
                         self.advance(&mut code_slice);
                         self.advance(&mut code_slice);
                         let str = self.get_string(&mut code_slice);
-                        return Token::new(
+                        return Ok(Token::new(
                             TokenType::FString,
                             &self.filename.clone(),
                             self.line_start as i32,
                             self.lineno,
                             0,
                             TokenValue::Str(str),
-                        );
+                        ));
                     } else {
                         // ID
                         let str = self.get_id(&mut code_slice);
-                        return Token::new(
+                        return Ok(Token::new(
                             TokenType::ID,
                             &self.filename.clone(),
                             self.line_start as i32,
                             self.lineno,
                             0,
                             TokenValue::Str(str),
-                        );
+                        ));
                     }
                 }
                 c if c.is_numeric() => {
                     let num = self.get_int(&mut code_slice);
-                    return Token::new(
+                    return Ok(Token::new(
                         TokenType::Number,
                         &self.filename.clone(),
                         self.line_start as i32,
                         self.lineno,
                         0,
                         TokenValue::Int(num),
-                    );
+                    ));
                 }
 
-                _ => panic!("Unrecognized token"),
+                _ => return Err(LexError::UnknownToken),
             }
         }
 
-        Token::new(TokenType::Ignore, "", 0, 0, 0, TokenValue::None)
+        Ok(Token::new(TokenType::Ignore, "", 0, 0, 0, TokenValue::None))
     }
 
     fn advance(&mut self, it: &mut Peekable<Chars>) -> Option<char> {
@@ -387,6 +390,8 @@ mod tests {
         for (index, test) in tests.iter().enumerate() {
             let mut l = Lexer::new(test.input.to_string(), "".to_string());
             let t = l.next();
+            assert!(t.is_ok());
+            let t = t.unwrap();
             assert_eq!(
                 t.tid, test.expected.tid,
                 "Test {}, TokenType ({:?}) mismatch  expected {:?}",
@@ -397,7 +402,10 @@ mod tests {
                 "Test {}, TokenValue ({:?}) mismatch expected ({:?})",
                 index, t.value, test.expected.value
             );
+
             let t = l.next();
+            assert!(t.is_ok());
+            let t = t.unwrap();
             assert_eq!(t.tid, TokenType::EOF);
         }
     }
@@ -551,6 +559,10 @@ mod tests {
             loop {
                 let t = l.next();
                 let expected = it.next();
+
+                assert!(t.is_ok());
+                let t = t.unwrap();
+
                 if t.tid == TokenType::EOF {
                     break;
                 }
