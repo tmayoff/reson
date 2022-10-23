@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 
 use crate::parser::token::TokenValue;
 
@@ -6,9 +6,9 @@ use super::token::Token;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct ArgumentNode {
-    pub arguments: Vec<Box<Node>>,
+    pub arguments: Vec<Rc<Node>>,
     pub commas: Vec<Token>,
-    pub kwargs: BTreeMap<Box<Node>, Box<Node>>,
+    pub kwargs: BTreeMap<Rc<Node>, Rc<Node>>,
     order_error: bool,
 }
 
@@ -22,22 +22,22 @@ impl ArgumentNode {
         }
     }
 
-    pub fn append(&mut self, statement: Box<Node>) {
+    pub fn append(&mut self, statement: Rc<Node>) {
         if !self.kwargs.is_empty() {
             self.order_error = true;
         }
 
-        if statement.node_kind != NodeKind::EmptyNode {
+        if statement.node_type != NodeType::EmptyNode {
             self.arguments.push(statement);
         }
     }
 
-    pub fn set_kwarg(&mut self, name: Box<Node>, value: Box<Node>) {
+    pub fn set_kwarg(&mut self, name: Rc<Node>, value: Rc<Node>) {
         // TODO warning about duplicate kwargs
         self.kwargs.insert(name, value);
     }
 
-    pub fn set_kwarg_no_check(&mut self, name: Box<Node>, value: Box<Node>) {
+    pub fn set_kwarg_no_check(&mut self, name: Rc<Node>, value: Rc<Node>) {
         self.kwargs.insert(name, value);
     }
 
@@ -48,19 +48,19 @@ impl ArgumentNode {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct MethodNode {
-    source_object: Box<Node>,
+    source_object: Rc<Node>,
     name: String,
-    args: Box<Node>,
+    args: Rc<Node>,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct IndexNode {
-    iobject: Box<Node>,
-    index: Box<Node>,
+    iobject: Rc<Node>,
+    index: Rc<Node>,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]
-pub enum NodeKind {
+pub enum NodeType {
     BoolNode {
         value: bool,
     },
@@ -83,70 +83,70 @@ pub enum NodeKind {
     BreakNode,
     ArgumentNode(ArgumentNode),
     ArrayNode {
-        args: Box<Node>,
+        args: Rc<Node>,
     },
     DictNode {
-        args: Box<Node>,
+        args: Rc<Node>,
     },
     EmptyNode,
     OrNode {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Rc<Node>,
+        right: Rc<Node>,
     },
     AndNode {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Rc<Node>,
+        right: Rc<Node>,
     },
     ComparisonNode {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Rc<Node>,
+        right: Rc<Node>,
         ctype: String,
     },
     ArithmeticNode {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Rc<Node>,
+        right: Rc<Node>,
         operation: String,
     },
     NotNode {
-        value: Box<Node>,
+        value: Rc<Node>,
     },
     CodeBlock {
-        lines: Vec<Box<Node>>,
+        lines: Vec<Rc<Node>>,
     },
     IndexNode(IndexNode),
     MethodNode(MethodNode),
     FunctionNode {
         func_name: String,
-        args: Box<Node>,
+        args: Rc<Node>,
     },
     AssignmentNode {
         var_name: String,
-        value: Box<Node>,
+        value: Rc<Node>,
     },
     PlusAssignmentNode {
         var_name: String,
-        value: Box<Node>,
+        value: Rc<Node>,
     },
     ForeachClauseNode {
         varname: Vec<String>,
-        items: Box<Node>,
-        block: Box<Node>,
+        items: Rc<Node>,
+        block: Rc<Node>,
     },
     IfNode {
-        condition: Box<Node>,
-        block: Box<Node>,
+        condition: Rc<Node>,
+        block: Rc<Node>,
     },
     IfClauseNode {
-        ifs: Vec<Box<Node>>,
-        elseblock: Option<Box<Node>>,
+        ifs: Vec<Rc<Node>>,
+        elseblock: Option<Rc<Node>>,
     },
     UMinusNode {
-        value: Box<Node>,
+        value: Rc<Node>,
     },
     TernaryNode {
-        condition: Box<Node>,
-        trueblock: Box<Node>,
-        falseblock: Box<Node>,
+        condition: Rc<Node>,
+        trueblock: Rc<Node>,
+        falseblock: Rc<Node>,
     },
 }
 
@@ -157,7 +157,7 @@ pub struct Node {
     pub filename: String,
     pub end_lineno: Option<i32>,
     pub end_colno: Option<i32>,
-    pub node_kind: NodeKind,
+    pub node_type: NodeType,
 }
 
 impl Default for Node {
@@ -168,7 +168,7 @@ impl Default for Node {
             filename: Default::default(),
             end_lineno: Default::default(),
             end_colno: Default::default(),
-            node_kind: NodeKind::EmptyNode,
+            node_type: NodeType::EmptyNode,
         }
     }
 }
@@ -208,88 +208,92 @@ impl PartialOrd for Node {
 }
 
 impl Node {
-    pub fn new(tok: Token, node_kind: NodeKind) -> Box<Self> {
-        Box::new(Self {
+    pub fn new(tok: Token, node_kind: NodeType) -> Self {
+        Self {
             lineno: tok.lineno,
             colno: tok.colno,
             filename: tok.filename,
             end_lineno: None,
             end_colno: None,
-            node_kind,
-        })
+            node_type: node_kind,
+        }
     }
 
-    pub fn boolean_node(tok: Token) -> Box<Self> {
+    pub fn boolean_node(tok: Token) -> Self {
         let v = tok.value.clone();
         assert!(matches!(v, TokenValue::Bool(_)));
         if let TokenValue::Bool(v) = v {
-            return Node::new(tok.clone(), NodeKind::BoolNode { value: v });
+            return Node::new(tok.clone(), NodeType::BoolNode { value: v });
         }
 
         panic!("Value not a boolean");
     }
 
-    pub fn id_node(tok: Token, id: String) -> Box<Self> {
-        Node::new(tok, NodeKind::IDNode { value: id })
+    pub fn id_node(tok: Token, id: String) -> Self {
+        Node::new(tok, NodeType::IDNode { value: id })
     }
 
-    pub fn number_node(tok: Token, num: i32) -> Box<Self> {
-        Node::new(tok, NodeKind::NumberNode { value: num })
+    pub fn number_node(tok: Token, num: i32) -> Self {
+        Node::new(tok, NodeType::NumberNode { value: num })
     }
 
-    pub fn string_node(tok: Token, str: String) -> Box<Self> {
-        Node::new(tok, NodeKind::StringNode { value: str })
+    pub fn string_node(tok: Token, str: String) -> Self {
+        Node::new(tok, NodeType::StringNode { value: str })
     }
 
-    pub fn fstring_node(tok: Token, str: String) -> Box<Self> {
-        Node::new(tok, NodeKind::FStringNode { value: str })
+    pub fn fstring_node(tok: Token, str: String) -> Self {
+        Node::new(tok, NodeType::FStringNode { value: str })
     }
 
-    pub fn multiline_fstring_node(tok: Token, str: String) -> Box<Self> {
-        Node::new(tok, NodeKind::MultilineFStringNode { value: str })
+    pub fn multiline_fstring_node(tok: Token, str: String) -> Self {
+        Node::new(tok, NodeType::MultilineFStringNode { value: str })
     }
 
-    pub fn argument_node(tok: Token) -> Box<Self> {
-        let kind = NodeKind::ArgumentNode(ArgumentNode::new());
+    pub fn argument_node(tok: Token) -> Self {
+        let kind = NodeType::ArgumentNode(ArgumentNode::new());
         Node::new(tok, kind)
     }
 
     pub fn array_node(
-        args: Box<Node>,
+        args: &Node,
         lineno: i32,
         colno: i32,
         end_lineno: Option<i32>,
         end_colno: Option<i32>,
-    ) -> Box<Self> {
+    ) -> Self {
         let filename = args.filename.clone();
-        let kind = NodeKind::ArrayNode { args };
-        Box::new(Self {
+        let kind = NodeType::ArrayNode {
+            args: Rc::from(args.to_owned()),
+        };
+        Self {
             lineno,
             colno,
             filename,
             end_lineno,
             end_colno,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
     pub fn dict_node(
-        args: Box<Node>,
+        args: &Node,
         lineno: i32,
         colno: i32,
         end_lineno: Option<i32>,
         end_colno: Option<i32>,
-    ) -> Box<Self> {
+    ) -> Self {
         let filename = args.filename.clone();
-        let kind = NodeKind::DictNode { args };
-        Box::new(Self {
+        let kind = NodeType::DictNode {
+            args: Rc::from(args.to_owned()),
+        };
+        Self {
             lineno,
             colno,
             filename,
             end_lineno,
             end_colno,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
     pub fn function_node(
@@ -299,171 +303,191 @@ impl Node {
         end_lineno: Option<i32>,
         end_colno: Option<i32>,
         func_name: String,
-        args: Box<Node>,
-    ) -> Box<Self> {
-        let kind = NodeKind::FunctionNode { func_name, args };
-        Box::new(Self {
+        args: &Node,
+    ) -> Self {
+        let kind = NodeType::FunctionNode {
+            func_name,
+            args: Rc::from(args.to_owned()),
+        };
+        Self {
             lineno,
             colno,
             filename,
             end_lineno,
             end_colno,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
     pub fn method_node(
         filename: String,
         lineno: i32,
         colno: i32,
-        source_object: Box<Node>,
+        source_object: &Node,
         name: String,
-        args: Box<Node>,
-    ) -> Box<Self> {
-        let kind = NodeKind::MethodNode(MethodNode {
-            source_object,
+        args: &Node,
+    ) -> Self {
+        let kind = NodeType::MethodNode(MethodNode {
+            source_object: Rc::from(source_object.to_owned()),
             name,
-            args,
+            args: Rc::from(args.to_owned()),
         });
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
             filename,
             end_lineno: None,
             end_colno: None,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
-    pub fn if_node(linenode: Box<Node>, condition: Box<Node>, block: Box<Node>) -> Box<Node> {
-        let kind = NodeKind::IfNode { condition, block };
-        Box::new(Self {
+    pub fn if_node(linenode: &Node, condition: &Node, block: &Node) -> Self {
+        let kind = NodeType::IfNode {
+            condition: Rc::from(condition.to_owned()),
+            block: Rc::from(block.to_owned()),
+        };
+
+        Self {
             lineno: linenode.lineno,
             colno: linenode.colno,
-            filename: linenode.filename,
-            node_kind: kind,
+            filename: linenode.filename.clone(),
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn ifclause_node(linenode: &Box<Node>) -> Box<Self> {
-        let kind = NodeKind::IfClauseNode {
+    pub fn ifclause_node(linenode: &Node) -> Self {
+        let kind = NodeType::IfClauseNode {
             ifs: Vec::new(),
             elseblock: None,
         };
 
-        Box::new(Self {
+        Self {
             lineno: linenode.lineno,
             colno: linenode.colno,
             filename: linenode.filename.clone(),
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn index_node(iobject: Box<Node>, index: Box<Node>) -> Box<Self> {
+    pub fn index_node(iobject: &Node, index: &Node) -> Self {
         let filename = iobject.filename.clone();
         let lineno = iobject.lineno;
         let colno = iobject.colno;
 
-        let kind = NodeKind::IndexNode(IndexNode { iobject, index });
-        Box::new(Self {
+        let kind = NodeType::IndexNode(IndexNode {
+            iobject: Rc::from(iobject.to_owned()),
+            index: Rc::from(index.to_owned()),
+        });
+        Self {
             lineno,
             colno,
             filename,
             end_lineno: None,
             end_colno: None,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
-    pub fn uminus_node(current_location: Token, value: Box<Node>) -> Box<Self> {
-        let kind = NodeKind::UMinusNode { value };
-        Box::new(Self {
+    pub fn uminus_node(current_location: Token, value: &Node) -> Self {
+        let kind = NodeType::UMinusNode {
+            value: Rc::from(value.to_owned()),
+        };
+        Self {
             lineno: current_location.lineno,
             colno: current_location.colno,
             filename: current_location.filename,
             end_lineno: None,
             end_colno: None,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
-    pub fn not_node(token: Token, value: Box<Node>) -> Box<Self> {
-        let kind = NodeKind::NotNode { value };
-        Box::new(Self {
+    pub fn not_node(token: Token, value: &Node) -> Self {
+        let kind = NodeType::NotNode {
+            value: Rc::from(value.to_owned()),
+        };
+        Self {
             lineno: token.lineno,
             colno: token.colno,
             filename: token.filename,
             end_lineno: None,
             end_colno: None,
-            node_kind: kind,
-        })
+            node_type: kind,
+        }
     }
 
-    pub fn arithmetic_node(operation: &str, left: Box<Node>, right: Box<Node>) -> Box<Self> {
+    pub fn arithmetic_node(operation: &str, left: &Node, right: &Node) -> Self {
         let lineno = left.lineno;
         let colno = left.colno;
 
-        let kind = NodeKind::ArithmeticNode {
-            left,
-            right,
+        let kind = NodeType::ArithmeticNode {
+            left: Rc::from(left.to_owned()),
+            right: Rc::from(right.to_owned()),
             operation: operation.to_string(),
         };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn comparison_node(ctype: &str, left: Box<Node>, right: Box<Node>) -> Box<Self> {
+    pub fn comparison_node(ctype: &str, left: &Node, right: &Node) -> Self {
         let filename = left.filename.clone();
         let lineno = left.lineno;
         let colno = left.colno;
-        let kind = NodeKind::ComparisonNode {
-            left,
-            right,
+        let kind = NodeType::ComparisonNode {
+            left: Rc::from(left.to_owned()),
+            right: Rc::from(right.to_owned()),
             ctype: ctype.to_string(),
         };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
             filename,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn and_node(left: Box<Node>, right: Box<Node>) -> Box<Self> {
+    pub fn and_node(left: &Node, right: &Node) -> Self {
         let lineno = left.lineno;
         let colno = left.colno;
-        let kind = NodeKind::AndNode { left, right };
+        let kind = NodeType::AndNode {
+            left: Rc::from(left.to_owned()),
+            right: Rc::from(right.to_owned()),
+        };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn or_node(left: Box<Node>, right: Box<Node>) -> Box<Self> {
+    pub fn or_node(left: &Node, right: &Node) -> Self {
         let lineno = left.lineno;
         let colno = left.colno;
 
-        let kind = NodeKind::OrNode { left, right };
+        let kind = NodeType::OrNode {
+            left: Rc::from(left.to_owned()),
+            right: Rc::from(right.to_owned()),
+        };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
     pub fn plusassignment_node(
@@ -471,17 +495,20 @@ impl Node {
         lineno: i32,
         colno: i32,
         var_name: String,
-        value: Box<Node>,
-    ) -> Box<Self> {
-        let kind = NodeKind::PlusAssignmentNode { var_name, value };
+        value: &Node,
+    ) -> Self {
+        let kind = NodeType::PlusAssignmentNode {
+            var_name,
+            value: Rc::from(value.to_owned()),
+        };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
             filename,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
     pub fn assignment_node(
@@ -489,50 +516,49 @@ impl Node {
         lineno: i32,
         colno: i32,
         var_name: String,
-        value: Box<Node>,
-    ) -> Box<Self> {
-        let kind = NodeKind::AssignmentNode { var_name, value };
+        value: &Node,
+    ) -> Self {
+        let kind = NodeType::AssignmentNode {
+            var_name,
+            value: Rc::from(value.to_owned()),
+        };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
             filename,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn ternary_node(
-        condition: Box<Node>,
-        trueblock: Box<Node>,
-        falseblock: Box<Node>,
-    ) -> Box<Self> {
+    pub fn ternary_node(condition: &Node, trueblock: &Node, falseblock: &Node) -> Self {
         let filename = condition.filename.clone();
         let lineno = condition.lineno;
         let colno = condition.colno;
 
-        let kind = NodeKind::TernaryNode {
-            condition,
-            trueblock,
-            falseblock,
+        let kind = NodeType::TernaryNode {
+            condition: Rc::from(condition.to_owned()),
+            trueblock: Rc::from(trueblock.to_owned()),
+            falseblock: Rc::from(falseblock.to_owned()),
         };
 
-        Box::new(Self {
+        Self {
             lineno,
             colno,
             filename,
-            node_kind: kind,
+            node_type: kind,
             ..Default::default()
-        })
+        }
     }
 
-    pub fn empty_node(lineno: i32, colno: i32, filename: String) -> Box<Self> {
-        Box::new(Self {
+    pub fn empty_node(lineno: i32, colno: i32, filename: String) -> Self {
+        Self {
             lineno,
             colno,
             filename,
-            node_kind: NodeKind::EmptyNode,
+            node_type: NodeType::EmptyNode,
             ..Default::default()
-        })
+        }
     }
 }
