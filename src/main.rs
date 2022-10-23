@@ -18,7 +18,8 @@ mod utils;
 use crate::backend::Backend;
 use crate::build::Build;
 use crate::environment::Environment;
-use crate::interpreter::{Interpreter, InterpreterTrait};
+use crate::interpreter::interpreter::Interpreter;
+use crate::interpreter::InterpreterTrait;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_FILE_NAME: &str = "meson.build";
@@ -146,7 +147,7 @@ fn main() {
 
             interpreter.run();
 
-            interpreter.backend.expect("No backend ").generate();
+            interpreter.backend.expect("No backend found").generate();
         }
 
         Commands::Compile {} => todo!(),

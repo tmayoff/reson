@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::{fmt::Display, fs};
 use strum::IntoEnumIterator;
 
 use super::build_element::BuildElement;
 use super::Backend;
-use crate::build::{Build, Target};
+use crate::build::{Build, Target, TargetType};
 use crate::compiler::Compiler;
 use crate::environment::{self, Environment};
-use crate::interpreter::Interpreter;
 use crate::utils::{MachineChoice, PerMachine};
 
 const RAW_NAMES: [&str; 6] = [
@@ -190,7 +190,6 @@ pub struct NinjaBackend {
     env: Environment,
 
     build: Build,
-    interpreter: Box<Interpreter>,
 
     rules: Vec<NinjaObject>,
     rule_dict: HashMap<String, NinjaObject>,
@@ -203,11 +202,10 @@ pub struct NinjaBackend {
 impl NinjaBackend {}
 
 impl Backend for NinjaBackend {
-    fn new(build: &Build, interpreter: &Interpreter) -> Self {
+    fn new(build: &Build) -> Self {
         Self {
             env: build.environment.clone(),
             build: build.clone(),
-            interpreter: Box::from(interpreter.clone()),
             ..Default::default()
         }
     }
@@ -358,7 +356,14 @@ impl NinjaBackend {
     }
 
     fn generate_target(&mut self, target: (&String, &Target)) {
-        todo!()
+        if let TargetType::BuildTarget(_) = target.1.target_type {
+            fs::create_dir_all(self.get_target_private_dir_abs(target.1));
+        }
+
+        // let compiled_sources = Vec::new();
+        let name = target.1.get_id();
+
+        // let elem = self.generate_link();
     }
 
     fn generate_phony(&mut self) {
@@ -518,4 +523,32 @@ impl NinjaBackend {
     }
 
     fn generate_pch_rule_for(&mut self, lang: &String, compiler: &Compiler) {}
+
+    fn get_target_private_dir_abs(&self, target: &Target) -> PathBuf {
+        let mut path = self.env.build_dir.clone().unwrap_or_default();
+        path.push(self.get_target_private_dir(target));
+
+        path
+    }
+
+    fn get_target_private_dir(&self, target: &Target) -> PathBuf {
+        let mut path = self.get_target_filename(target);
+        path.set_extension(".p");
+        path
+    }
+
+    fn get_target_filename(&self, target: &Target) -> PathBuf {
+        let filename = match &target.target_type {
+            TargetType::BuildTarget(build) => &build.filename,
+            TargetType::CustomTarget => todo!(),
+        };
+
+        let mut path = self.get_target_dir(target);
+        path.push(filename);
+        path
+    }
+
+    fn get_target_dir(&self, target: &Target) -> PathBuf {
+        PathBuf::from("meson-out")
+    }
 }

@@ -23,7 +23,7 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
 
     // ==== Build ==== //
     let mut cmd = Command::new("ninja");
-    cmd.arg("ninja").current_dir(&build_dir);
+    cmd.current_dir(&build_dir);
     cmd.assert().success();
 
     // Cleanup
