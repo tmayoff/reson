@@ -11,7 +11,7 @@ const INFO_DIR: &str = "meson-info";
 #[derive(Clone, Default)]
 pub struct Environment {
     pub source_dir: PathBuf,
-    pub build_dir: Option<PathBuf>,
+    pub build_dir: PathBuf,
 
     coredata: CoreData,
 
@@ -23,28 +23,26 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn new(source_dir: PathBuf, build_dir: Option<&PathBuf>) -> Result<Self, std::io::Error> {
+    pub fn new(source_dir: &PathBuf, build_dir: &PathBuf) -> Result<Self, std::io::Error> {
         let mut env = Self {
-            source_dir,
+            source_dir: source_dir.to_owned(),
             ..Default::default()
         };
 
-        if let Some(build_dir) = build_dir {
-            env.build_dir = Some(build_dir.clone());
+        env.build_dir = build_dir.clone();
 
-            env.scratch_dir = build_dir.clone();
-            env.scratch_dir.push(PRIVATE_DIR);
-            env.info_dir = build_dir.clone();
-            env.info_dir.push(INFO_DIR);
-            env.log_dir = build_dir.clone();
-            env.log_dir.push(LOG_DIR);
+        env.scratch_dir = build_dir.clone();
+        env.scratch_dir.push(PRIVATE_DIR);
+        env.info_dir = build_dir.clone();
+        env.info_dir.push(INFO_DIR);
+        env.log_dir = build_dir.clone();
+        env.log_dir.push(LOG_DIR);
 
-            std::fs::create_dir_all(&env.scratch_dir)?;
-            std::fs::create_dir_all(&env.info_dir)?;
-            std::fs::create_dir_all(&env.log_dir)?;
+        std::fs::create_dir_all(&env.scratch_dir)?;
+        std::fs::create_dir_all(&env.info_dir)?;
+        std::fs::create_dir_all(&env.log_dir)?;
 
-            // env.core_data = coredata.load(env.get_build_dir());
-        }
+        // env.core_data = coredata.load(env.get_build_dir());
 
         env.set_default_binaries_from_env();
 
@@ -66,7 +64,7 @@ impl Environment {
         }
     }
 
-    pub fn get_build_dir(&self) -> &Option<PathBuf> {
+    pub fn get_build_dir(&self) -> &PathBuf {
         &self.build_dir
     }
 

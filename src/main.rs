@@ -2,7 +2,7 @@
 extern crate log;
 
 use snafu::{prelude::*, Whatever};
-use std::{env::current_dir, path::Path, path::PathBuf};
+use std::{path::Path, path::PathBuf};
 
 use chrono::prelude::*;
 use clap::{Parser, Subcommand};
@@ -15,6 +15,7 @@ mod environment;
 mod interpreter;
 mod parser;
 mod utils;
+use crate::backend::ninja::NinjaBackend;
 use crate::backend::Backend;
 use crate::build::Build;
 use crate::environment::Environment;
@@ -32,14 +33,14 @@ fn has_build_file(dir: &PathBuf) -> bool {
 }
 
 fn validate_core_dirs(
-    dir1: Option<PathBuf>,
-    dir2: Option<PathBuf>,
+    dir1: &Option<PathBuf>,
+    dir2: &Option<PathBuf>,
 ) -> Result<(PathBuf, PathBuf), Whatever> {
     let mut _dir1 = PathBuf::new();
     let mut _dir2 = PathBuf::new();
     match dir1 {
         Some(dir1) => {
-            _dir1 = dir1;
+            _dir1 = dir1.to_owned();
         }
         None => {
             if dir2.is_none() {
@@ -55,15 +56,19 @@ fn validate_core_dirs(
     }
 
     if dir2.is_none() {
-        _dir2 = current_dir().expect("Failed to get current working directory");
+        _dir2 = std::env::current_dir().expect("Failed to get current working directory");
     }
 
-    // let _dir1 = _dir1
-    //     .canonicalize()
-    //     .expect("Failed to create absolute path");
-    // let _dir2 = _dir2
-    //     .canonicalize()
-    //     .expect("Failed to create absolute path");
+    std::fs::create_dir_all(&_dir1)
+        .unwrap_or_else(|_| panic!("Failed to create directory {:?}", &_dir1));
+    std::fs::create_dir_all(&_dir2)
+        .unwrap_or_else(|_| panic!("Failed to create directory {:?}", &_dir2));
+    let _dir1 = _dir1
+        .canonicalize()
+        .expect("Failed to create absolute path for dir1");
+    let _dir2 = _dir2
+        .canonicalize()
+        .expect("Failed to create absolute path for dir2");
 
     let err = std::fs::create_dir_all(&_dir1);
     if let Err(e) = err {
@@ -93,8 +98,8 @@ fn validate_core_dirs(
 }
 
 fn validate_dirs(
-    dir1: Option<PathBuf>,
-    dir2: Option<PathBuf>,
+    dir1: &Option<PathBuf>,
+    dir2: &Option<PathBuf>,
     _reconfigure: bool,
     _wipe: bool,
 ) -> Result<(PathBuf, PathBuf), Whatever> {
@@ -123,11 +128,11 @@ fn main() {
 
     match &args.command {
         Commands::Setup { build_dir } => {
-            let (source_dir, build_dir) = validate_dirs(build_dir.to_owned(), None, false, false)
-                .expect("Failed to validate dirs");
+            let (source_dir, build_dir) =
+                validate_dirs(build_dir, &None, false, false).expect("Failed to validate dirs");
 
-            let env = Environment::new(source_dir.clone(), Some(&build_dir))
-                .expect("Failed to setup environment");
+            let env =
+                Environment::new(&source_dir, &build_dir).expect("Failed to setup environment");
 
             debug!("Build Started at {}", Local::now());
             debug!("Main Binary {:?}", std::env::current_exe());
@@ -145,9 +150,11 @@ fn main() {
             // let host_machine = interpreter.get_builtin()["host_machine"].clone();
             // let target_machine = interpreter.get_builtin()["target_machine"].clone();
 
+            // This files the build struct based on the parsed file
             interpreter.run();
 
-            interpreter.backend.expect("No backend found").generate();
+            let mut backend = NinjaBackend::new(&interpreter.build);
+            backend.generate();
         }
 
         Commands::Compile {} => todo!(),

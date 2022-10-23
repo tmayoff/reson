@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::build::Build;
 
 pub mod ninja;
@@ -10,4 +12,6 @@ pub trait Backend {
     fn generate(&mut self);
 
     fn get_name(&self) -> &String;
+
+    fn get_build_to_src(&self) -> &PathBuf;
 }

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::{fmt::Display, fs};
@@ -10,6 +9,7 @@ use super::Backend;
 use crate::build::{Build, Target, TargetType};
 use crate::compiler::Compiler;
 use crate::environment::{self, Environment};
+use crate::interpreter::file::File;
 use crate::utils::{MachineChoice, PerMachine};
 
 const RAW_NAMES: [&str; 6] = [
@@ -191,10 +191,15 @@ pub struct NinjaBackend {
 
     build: Build,
 
+    build_to_src: PathBuf,
+    src_to_build: PathBuf,
+
     rules: Vec<NinjaObject>,
     rule_dict: HashMap<String, NinjaObject>,
 
     all_outputs: Vec<bool>,
+
+    processed_targets: Vec<String>,
 
     build_elements: Vec<NinjaObject>,
 }
@@ -203,7 +208,19 @@ impl NinjaBackend {}
 
 impl Backend for NinjaBackend {
     fn new(build: &Build) -> Self {
+        let bts = pathdiff::diff_paths(&build.environment.source_dir, &build.environment.build_dir)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Failed to get relative path between builddir ({:?}) and sourcedir ({:?})",
+                    &build.environment.build_dir, &build.environment.source_dir
+                )
+            });
+        let stb = pathdiff::diff_paths(&build.environment.build_dir, &build.environment.source_dir)
+            .expect("Failed to get relative path between sourcedir and builddir");
+
         Self {
+            build_to_src: bts,
+            src_to_build: stb,
             env: build.environment.clone(),
             build: build.clone(),
             ..Default::default()
@@ -212,11 +229,11 @@ impl Backend for NinjaBackend {
 
     fn generate(&mut self) {
         let ninja = environment::Environment::get_ninja_command_and_version(None, None);
-        let mut outfilename = self.env.build_dir.clone().unwrap_or_default();
+        let mut outfilename = self.env.build_dir.clone();
         outfilename.push("build.ninja");
-        let mut tmpfilename = self.env.build_dir.clone().unwrap_or_default();
+        let mut tmpfilename = self.env.build_dir.clone();
         tmpfilename.push("build.ninja~");
-        let mut file = File::create(&tmpfilename)
+        let mut file = fs::File::create(&tmpfilename)
             .unwrap_or_else(|_| panic!("Failed to create file {:?}", tmpfilename));
 
         writeln!(
@@ -242,7 +259,7 @@ impl Backend for NinjaBackend {
 
         self.add_build_comment(NinjaObject::Comment("Build rules for targets".to_string()));
         for t in &self.build.targets.clone() {
-            self.generate_target(t);
+            self.generate_target(t.1);
         }
 
         self.write_rules(&mut file);
@@ -256,16 +273,20 @@ impl Backend for NinjaBackend {
     fn get_name(&self) -> &String {
         &self.name
     }
+
+    fn get_build_to_src(&self) -> &PathBuf {
+        &self.build_to_src
+    }
 }
 
 impl NinjaBackend {
-    fn write_rules(&self, outfile: &mut File) {
+    fn write_rules(&self, outfile: &mut fs::File) {
         for r in &self.rules {
             write!(outfile, "{}", r).expect("Failed to write to file");
         }
     }
 
-    fn write_builds(&self, outfile: &mut File) {
+    fn write_builds(&self, outfile: &mut fs::File) {
         for b in &self.build_elements {
             write!(outfile, "{}", b).expect("Failed to write build_element to output");
         }
@@ -355,15 +376,50 @@ impl NinjaBackend {
         }
     }
 
-    fn generate_target(&mut self, target: (&String, &Target)) {
-        if let TargetType::BuildTarget(_) = target.1.target_type {
-            fs::create_dir_all(self.get_target_private_dir_abs(target.1));
+    fn generate_target(&mut self, target: &Target) {
+        if let TargetType::BuildTarget(_) = target.target_type {
+            let res = fs::create_dir_all(self.get_target_private_dir_abs(target));
+            if res.is_err() {
+                panic!("Failed to create target directories");
+            }
         }
 
         // let compiled_sources = Vec::new();
-        let name = target.1.get_id();
+        let name = target.get_id();
+        if self.processed_targets.contains(&name) {
+            return;
+        }
+        self.processed_targets.push(name);
 
-        // let elem = self.generate_link();
+        self.process_target_dependencies(target);
+
+        // self.generate_shlib_aliases(&target.1, self.get_target_dir(&target.1));
+
+        let target_sources = self.get_target_sources(target);
+        // let generated_sources = self.get_target_generated_sources(target);
+        // let transpiled_sources = ;
+
+        let outname = self.get_target_filename(target);
+
+        let mut obj_list = Vec::new();
+
+        for src in target_sources.values() {
+            let (o, s) = self.generate_single_compile(target, src);
+            obj_list.push(o);
+        }
+
+        let final_obj_list = obj_list.as_slice();
+
+        let mut elem = self.generate_link(
+            target,
+            &outname,
+            final_obj_list,
+            // linker,
+            // pch_objects,
+            // stdlib_args,
+        );
+
+        self.add_build(&mut elem);
     }
 
     fn generate_phony(&mut self) {
@@ -373,9 +429,9 @@ impl NinjaBackend {
 
         let elem = BuildElement::new(
             &self.all_outputs,
-            &vec!["PHONY".to_string()],
+            &[PathBuf::from("PHONY")],
             "phony",
-            &vec!["".to_string()],
+            &[PathBuf::from("")],
         );
 
         self.add_build(&mut NinjaObject::BuildElement(elem));
@@ -423,6 +479,69 @@ impl NinjaBackend {
         // self.generate_pch_rule_for(lang, compiler);
         // }
         // }
+    }
+
+    fn generate_single_compile(&mut self, target: &Target, src: &File) -> (PathBuf, PathBuf) {
+        let obj_basename = self.get_object_filename_from_source(target, src);
+        let rel_obj = self.get_target_private_dir(target).join(obj_basename);
+
+        let rel_src = src.rel_to_builddir(&self.build_to_src);
+
+        let commands = vec![
+            "-I.".to_string(),
+            "-I..".to_string(),
+            "-fcolor-diagnostics".to_string(),
+            "-D_FILE_OFFSET_BITS=64".to_string(),
+            "-Wall".to_string(),
+            "-Winvalid-pch".to_string(),
+            "-Wnon-virtual-dtor".to_string(),
+            "-Wextra".to_string(),
+            "-Wpedantic".to_string(),
+            "-std=c++14".to_string(),
+            "-O0".to_string(),
+            "-g".to_string(),
+        ];
+
+        let mut elem = BuildElement::new(
+            &self.all_outputs,
+            &[rel_obj.to_owned()],
+            "cpp_COMPILER",
+            &[rel_src.to_owned()],
+        );
+
+        elem.add_item("DEPFILE", &["simple.p/main.cpp.o.d".to_owned()]);
+        elem.add_item("DEPFILE_UNQUOTED", &["simple.p/main.cpp.o.d".to_owned()]);
+        elem.add_item("ARGS", &commands);
+
+        self.add_build(&mut NinjaObject::BuildElement(elem));
+
+        (rel_obj, rel_src)
+    }
+
+    fn generate_link(
+        &self,
+        target: &Target,
+        outname: &PathBuf,
+        obj_list: &[PathBuf], // linker: String,
+                              // extra_args: Option<String>,
+                              // stdlib_args: Option<String>,
+    ) -> NinjaObject {
+        let linker_rule = format!("cpp_LINKER{}", self.get_rule_suffix(MachineChoice::Host));
+        let commands = vec![
+            "-Wl,--as-needed".to_string(),
+            "-Wl".to_string(),
+            "--no-undefined".to_string(),
+        ];
+
+        let mut elem = BuildElement::new(
+            &self.all_outputs,
+            vec![outname.to_owned()].as_slice(),
+            &linker_rule,
+            obj_list,
+        );
+
+        elem.add_item("LINK_ARGS", &commands);
+        NinjaObject::BuildElement(elem)
     }
 
     fn generate_static_link_rules(&mut self) {
@@ -497,7 +616,10 @@ impl NinjaBackend {
             .map(|c| Command::String(c.to_owned()))
             .collect();
 
-        let binding = Vec::from([Command::String("$ARGS".to_string())]);
+        let binding = vec![
+            Command::String("$ARGS".to_string()),
+            Command::String("-MD -MQ $out -MF $DEPFILE -o $out -c $in".to_string()),
+        ];
         let args = binding.as_slice();
         let description = format!("Compiling {} object $out", "C++");
         let deps = "gcc";
@@ -514,6 +636,44 @@ impl NinjaBackend {
         )));
     }
 
+    fn process_target_dependencies(&mut self, target: &Target) {
+        for t in target.get_dependencies(None) {
+            if !self.processed_targets.contains(&t.get_id()) {
+                self.generate_target(&t);
+            }
+        }
+    }
+
+    fn get_object_filename_from_source(&self, target: &Target, source: &File) -> PathBuf {
+        let build_dir = &self.env.build_dir;
+        let rel_src = source.rel_to_builddir(&self.build_to_src);
+
+        let gen_source = if rel_src.is_absolute() {
+            rel_src
+        } else {
+            let p = build_dir.join(rel_src);
+            pathdiff::diff_paths(p, &self.env.source_dir).expect("Failed to get relative path")
+        };
+
+        let mut gen_source = gen_source
+            .canonicalize()
+            .expect("Failed to canonicalize source");
+        gen_source.set_extension("o");
+
+        gen_source
+    }
+
+    fn get_target_sources(&self, target: &Target) -> HashMap<PathBuf, File> {
+        let mut srcs: HashMap<PathBuf, File> = HashMap::new();
+
+        for s in &target.sources {
+            let f = s.rel_to_builddir(&self.build_to_src);
+            srcs.insert(f, s.to_owned());
+        }
+
+        srcs
+    }
+
     fn get_compiler_rule_name(&self, lang: &str, machine: MachineChoice) -> String {
         format!("{}_COMPILER{}", lang, self.get_rule_suffix(machine))
     }
@@ -525,7 +685,7 @@ impl NinjaBackend {
     fn generate_pch_rule_for(&mut self, lang: &String, compiler: &Compiler) {}
 
     fn get_target_private_dir_abs(&self, target: &Target) -> PathBuf {
-        let mut path = self.env.build_dir.clone().unwrap_or_default();
+        let mut path = self.env.build_dir.clone();
         path.push(self.get_target_private_dir(target));
 
         path
@@ -533,7 +693,7 @@ impl NinjaBackend {
 
     fn get_target_private_dir(&self, target: &Target) -> PathBuf {
         let mut path = self.get_target_filename(target);
-        path.set_extension(".p");
+        path.set_extension("p");
         path
     }
 
@@ -541,14 +701,36 @@ impl NinjaBackend {
         let filename = match &target.target_type {
             TargetType::BuildTarget(build) => &build.filename,
             TargetType::CustomTarget => todo!(),
+            TargetType::SharedLibrary => todo!(),
+            TargetType::StaticLibrary => todo!(),
         };
 
-        let mut path = self.get_target_dir(target);
-        path.push(filename);
-        path
+        self.get_target_dir(target).join(filename)
     }
 
     fn get_target_dir(&self, target: &Target) -> PathBuf {
-        PathBuf::from("meson-out")
+        PathBuf::from(&target.subdir)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::path::PathBuf;
+
+    use crate::{backend::Backend, build::Build, environment::Environment};
+
+    use super::NinjaBackend;
+
+    #[test]
+    fn test() {
+        let env = Environment::new(&PathBuf::from("src"), &PathBuf::from("build"))
+            .expect("Failed ot get environment");
+        let b = Build::new(env);
+        let n = NinjaBackend::new(&b);
+        println!("{:?}", &n.build_to_src);
+        println!("{:?}", &n.src_to_build);
+
+        assert!(true);
     }
 }
