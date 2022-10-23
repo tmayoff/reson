@@ -19,8 +19,7 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- stdout\n{:?}", std::str::from_utf8(stdout).unwrap());
     println!("--- stderr\n{:?}", std::str::from_utf8(stderr).unwrap());
 
-    let mut build_dir = cwd;
-    build_dir.push("build");
+    let build_dir = cwd.join("build");
     assert!(build_dir.exists());
 
     // ==== Build ==== //
@@ -36,7 +35,7 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
 
     // ==== Run ===== //
     println!("======= Running ===== ");
-    let mut cmd = Command::new("simple");
+    let mut cmd = Command::new("./simple");
     cmd.current_dir(&build_dir);
     let output = &cmd.output().expect("Failed to get output of command");
     let stdout = &output.stdout;
