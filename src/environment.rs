@@ -1,8 +1,10 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use crate::{coredata::CoreData, utils::MachineChoice};
 use lazy_static::lazy_static;
-use strum::IntoEnumIterator;
 
 const PRIVATE_DIR: &str = "meson-private";
 const LOG_DIR: &str = "meson-logs";
@@ -23,20 +25,16 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn new(source_dir: &PathBuf, build_dir: &PathBuf) -> Result<Self, std::io::Error> {
+    pub fn new(source_dir: &Path, build_dir: &Path) -> Result<Self, std::io::Error> {
         let mut env = Self {
             source_dir: source_dir.to_owned(),
             ..Default::default()
         };
 
-        env.build_dir = build_dir.clone();
-
-        env.scratch_dir = build_dir.clone();
-        env.scratch_dir.push(PRIVATE_DIR);
-        env.info_dir = build_dir.clone();
-        env.info_dir.push(INFO_DIR);
-        env.log_dir = build_dir.clone();
-        env.log_dir.push(LOG_DIR);
+        env.build_dir = build_dir.to_owned();
+        env.scratch_dir = build_dir.join(PRIVATE_DIR);
+        env.info_dir = build_dir.join(INFO_DIR);
+        env.log_dir = build_dir.join(LOG_DIR);
 
         std::fs::create_dir_all(&env.scratch_dir)?;
         std::fs::create_dir_all(&env.info_dir)?;
@@ -49,10 +47,10 @@ impl Environment {
         Ok(env)
     }
 
-    pub fn get_build_command() -> Vec<String> {
-        let cmd = std::env::current_exe().expect("Couldn't find the current exe");
-        vec![cmd.to_string_lossy().to_string()]
-    }
+    // pub fn get_build_command() -> Vec<String> {
+    //     let cmd = std::env::current_exe().expect("Couldn't find the current exe");
+    //     vec![cmd.to_string_lossy().to_string()]
+    // }
 
     pub fn get_ninja_command_and_version(_version: Option<&str>, _log: Option<bool>) -> PathBuf {
         // let version = version.unwrap_or("1.8.2");
@@ -83,15 +81,15 @@ impl Environment {
         // }
     }
 
-    fn create_new_coredata() {}
+    //     fn create_new_coredata() {}
 
-    pub fn lookup_binary_entry(&self, machine: MachineChoice, name: &str) -> Option<&String> {
-        if self.binaries[&machine].contains_key(name) {
-            return Some(&self.binaries[&machine][name]);
-        }
+    //     pub fn lookup_binary_entry(&self, machine: MachineChoice, name: &str) -> Option<&String> {
+    //         if self.binaries[&machine].contains_key(name) {
+    //             return Some(&self.binaries[&machine][name]);
+    //         }
 
-        None
-    }
+    //         None
+    //     }
 }
 
 lazy_static! {

@@ -437,36 +437,36 @@ impl NinjaBackend {
         self.add_build(&mut NinjaObject::BuildElement(elem));
     }
 
-    fn generate_scanner_rules(&mut self) {
-        let rulename = "depscan";
-        if self.rule_dict.contains_key(rulename) {
-            return;
-        }
+    // fn generate_scanner_rules(&mut self) {
+    //     let rulename = "depscan";
+    //     if self.rule_dict.contains_key(rulename) {
+    //         return;
+    //     }
 
-        let mut command: Vec<Command> = Environment::get_build_command()
-            .iter()
-            .map(|c| Command::String(c.to_owned()))
-            .collect();
+    //     let mut command: Vec<Command> = Environment::get_build_command()
+    //         .iter()
+    //         .map(|c| Command::String(c.to_owned()))
+    //         .collect();
 
-        command.push(Command::String("--internal".to_owned()));
-        command.push(Command::String("depscan".to_owned()));
+    //     command.push(Command::String("--internal".to_owned()));
+    //     command.push(Command::String("depscan".to_owned()));
 
-        let args = vec![
-            Command::String("$pickfile".to_owned()),
-            Command::String("$out".to_owned()),
-            Command::String("$in".to_owned()),
-        ];
-        let description = String::from("Module Scanner");
-        self.add_rule(&NinjaObject::Rule(NinjaRule::new(
-            rulename,
-            &command,
-            &args,
-            &description,
-            None,
-            None,
-            None,
-        )));
-    }
+    //     let args = vec![
+    //         Command::String("$pickfile".to_owned()),
+    //         Command::String("$out".to_owned()),
+    //         Command::String("$in".to_owned()),
+    //     ];
+    //     let description = String::from("Module Scanner");
+    //     self.add_rule(&NinjaObject::Rule(NinjaRule::new(
+    //         rulename,
+    //         &command,
+    //         &args,
+    //         &description,
+    //         None,
+    //         None,
+    //         None,
+    //     )));
+    // }
 
     fn generate_compiler_rules(&mut self) {
         // for machine in MachineChoice::iter() {
