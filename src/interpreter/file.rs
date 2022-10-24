@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Default)]
 pub struct File {
+    pub filename: String,
     subdir: String,
-    filename: String,
 }
 
 impl File {
@@ -14,7 +14,7 @@ impl File {
         }
     }
 
-    pub fn rel_to_builddir(&self, build_to_src: &PathBuf) -> PathBuf {
+    pub fn rel_to_builddir(&self, build_to_src: &Path) -> PathBuf {
         build_to_src.join(&self.subdir).join(&self.filename)
     }
 }

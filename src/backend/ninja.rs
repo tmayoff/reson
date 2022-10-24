@@ -644,16 +644,16 @@ impl NinjaBackend {
         }
     }
 
-    fn get_object_filename_from_source(&self, target: &Target, source: &File) -> PathBuf {
+    fn get_object_filename_from_source(&self, _target: &Target, source: &File) -> PathBuf {
         let build_dir = &self.env.build_dir;
-        let rel_src = source.rel_to_builddir(&self.build_to_src);
+        let mut rel_src = build_dir.join(&source.filename);
+        if rel_src.is_absolute() {
+            rel_src.set_extension("o");
+            return rel_src;
+        }
 
-        let gen_source = if rel_src.is_absolute() {
-            rel_src
-        } else {
-            let p = build_dir.join(rel_src);
-            pathdiff::diff_paths(p, &self.env.source_dir).expect("Failed to get relative path")
-        };
+        let gen_source = pathdiff::diff_paths(build_dir.join(rel_src), &self.env.source_dir)
+            .expect("Failed to get relative path");
 
         let mut gen_source = gen_source
             .canonicalize()
@@ -729,8 +729,5 @@ mod tests {
         let b = Build::new(env);
         let n = NinjaBackend::new(&b);
         println!("{:?}", &n.build_to_src);
-        println!("{:?}", &n.src_to_build);
-
-        assert!(true);
     }
 }
