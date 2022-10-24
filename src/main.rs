@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use snafu::{prelude::*, Whatever};
+use snafu::Whatever;
 use std::{path::Path, path::PathBuf};
 
 use chrono::prelude::*;
@@ -25,93 +25,59 @@ use crate::interpreter::InterpreterTrait;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_FILE_NAME: &str = "meson.build";
 
-fn has_build_file(dir: &PathBuf) -> bool {
-    let mut d = PathBuf::new();
-    d.push(dir);
-    d.push(BUILD_FILE_NAME);
+fn has_build_file(dir: &Path) -> bool {
+    let d = dir.join(BUILD_FILE_NAME);
     d.exists()
 }
 
 fn validate_core_dirs(
-    dir1: &Option<PathBuf>,
-    dir2: &Option<PathBuf>,
+    source_dir: &Option<PathBuf>,
+    build_dir: &Path,
 ) -> Result<(PathBuf, PathBuf), Whatever> {
-    let mut _dir1 = PathBuf::new();
-    let mut _dir2 = PathBuf::new();
-    match dir1 {
-        Some(dir1) => {
-            _dir1 = dir1.to_owned();
-        }
+    let source_dir = match source_dir {
+        Some(dir) => dir.to_path_buf(),
         None => {
-            if dir2.is_none() {
-                if !Path::new("meson.build").exists() && Path::new("../meson.build").exists() {
-                    _dir2.push("..");
-                } else {
-                    whatever!("Must specify at least one directory")
-                }
-            }
-            let cwd = std::env::current_dir().expect("Failed to get current working directory");
-            _dir1 = cwd;
+            std::env::current_dir().expect("Failed to get current working directory as source dir")
         }
-    }
+    };
 
-    if dir2.is_none() {
-        _dir2 = std::env::current_dir().expect("Failed to get current working directory");
-    }
+    std::fs::create_dir_all(&source_dir)
+        .unwrap_or_else(|_| panic!("Failed to create source directory {:?}", &source_dir));
 
-    std::fs::create_dir_all(&_dir1)
-        .unwrap_or_else(|_| panic!("Failed to create directory {:?}", &_dir1));
-    std::fs::create_dir_all(&_dir2)
-        .unwrap_or_else(|_| panic!("Failed to create directory {:?}", &_dir2));
-    let _dir1 = _dir1
+    std::fs::create_dir_all(build_dir)
+        .unwrap_or_else(|_| panic!("Failed to create directory {:?}", &build_dir));
+
+    let build_dir = build_dir
         .canonicalize()
-        .expect("Failed to create absolute path for dir1");
-    let _dir2 = _dir2
+        .expect("Failed to create absolute path for source dir");
+    let source_dir = source_dir
         .canonicalize()
-        .expect("Failed to create absolute path for dir2");
+        .expect("Failed to create absolute path for source dir");
 
-    let err = std::fs::create_dir_all(&_dir1);
-    if let Err(e) = err {
-        error!("Failed to create directories {}", e);
-    }
+    if has_build_file(&source_dir) {}
 
-    let err = std::fs::create_dir_all(&_dir2);
-    if let Err(e) = err {
-        error!("Failed to create directories {}", e);
-    }
+    assert!(
+        has_build_file(&source_dir),
+        "Source dir doesn't contain a meson.build file"
+    );
 
-    // TODO Make sure the dirs are not the same
-
-    if has_build_file(&_dir1) {
-        if has_build_file(&_dir2) {
-            whatever!("Both directories contain a build file.")
-        }
-
-        return Ok((_dir1, _dir2));
-    }
-
-    if has_build_file(&_dir2) {
-        return Ok((_dir2, _dir1));
-    }
-
-    whatever!("Neither directory contains a build file")
+    Ok((source_dir, build_dir))
 }
 
 fn validate_dirs(
-    dir1: &Option<PathBuf>,
-    dir2: &Option<PathBuf>,
+    source_dir: &Option<PathBuf>,
+    build_dir: &Path,
     _reconfigure: bool,
     _wipe: bool,
 ) -> Result<(PathBuf, PathBuf), Whatever> {
-    // validate core dirs
-    let (src_dir, build_dir) = validate_core_dirs(dir1, dir2)?;
+    let (src_dir, build_dir) = validate_core_dirs(source_dir, build_dir)?;
 
     Ok((src_dir, build_dir))
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    Setup { build_dir: Option<PathBuf> },
+    Setup { build_dir: PathBuf },
     Compile {},
 }
 
@@ -129,7 +95,7 @@ fn main() {
     match &args.command {
         Commands::Setup { build_dir } => {
             let (source_dir, build_dir) =
-                validate_dirs(build_dir, &None, false, false).expect("Failed to validate dirs");
+                validate_dirs(&None, build_dir, false, false).expect("Failed to validate dirs");
 
             let env =
                 Environment::new(&source_dir, &build_dir).expect("Failed to setup environment");
@@ -146,22 +112,15 @@ fn main() {
 
             let mut interpreter =
                 Interpreter::new(build, None, None, None, None).expect("Should be constructed");
-            // let build_machine = interpreter.get_builtin()["build_machine"].clone();
-            // let host_machine = interpreter.get_builtin()["host_machine"].clone();
-            // let target_machine = interpreter.get_builtin()["target_machine"].clone();
 
             // This files the build struct based on the parsed file
             interpreter.run();
 
+            // Generate the build definitions for the specified backend
             let mut backend = NinjaBackend::new(&interpreter.build);
             backend.generate();
         }
 
-        Commands::Compile {} => todo!(),
-        //     Commands::Setup => {
-
-        //
-        //     }
-        //     Commands::Compile => {}
+        Commands::Compile {} => todo!("Wrap ninja"),
     }
 }
