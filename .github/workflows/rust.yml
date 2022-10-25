@@ -16,19 +16,19 @@ jobs:
       matrix:
         name: [gcc, clang]
         include:
-          - cpp_compiler: g++
-            c_compielr: gcc
+          - CXX: g++
+            CC: gcc
             package: gcc
-          - cpp_compiler: clang++
-            c_compiler: clang
+          - CXX: clang++
+            CC: clang
             package: clang
 
 
     runs-on: ubuntu-latest
-
-    environment:
-      - CXX: ${{ matrix.cpp_compiler }}
-      - CC: ${{ matrix.c_compiler }}
+    name: Testing Build with ${{ matrix.cpp_compiler }} 
+    env:
+      CXX: ${{ matrix.CXX }}
+      CC: ${{ matrix.CC }}
 
     steps:
     - uses: actions/checkout@v3
