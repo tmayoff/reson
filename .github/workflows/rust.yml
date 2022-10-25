@@ -12,13 +12,27 @@ env:
 jobs:
   build:
 
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
+
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install apt Dependencies
-      run: sudo apt install ninja-build
+    - name: Remove All compilers
+      run: sudo apt remove gcc clang
+      continue-on-error: true
+
+    - name: Update apt
+      run: sudo apt-get -y update && sudo apt-get -y upgrade
+
+    - name: Install apt dependencies
+      run: sudo apt-get -y install python3-pip ninja-build ${{ matrix.compiler }}
+
+    # - name: Python deps
+    #   run: pip3 install ninja
 
     - name: Build
       run: cargo build --verbose
