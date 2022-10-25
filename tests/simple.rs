@@ -18,6 +18,7 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
     let stderr = &output.stderr;
     println!("--- stdout\n{:?}", std::str::from_utf8(stdout).unwrap());
     println!("--- stderr\n{:?}", std::str::from_utf8(stderr).unwrap());
+    cmd.assert().success();
 
     let build_dir = cwd.join("build");
     assert!(build_dir.exists());
@@ -32,16 +33,23 @@ fn simple_test() -> Result<(), Box<dyn std::error::Error>> {
     let stderr = &output.stderr;
     println!("--- stdout\n{:?}", std::str::from_utf8(stdout).unwrap());
     println!("--- stderr\n{:?}", std::str::from_utf8(stderr).unwrap());
+    cmd.assert().success();
 
     // ==== Run ===== //
     println!("======= Running ===== ");
     let mut cmd = Command::new("./simple");
     cmd.current_dir(&build_dir);
     let output = &cmd.output().expect("Failed to get output of command");
-    let stdout = &output.stdout;
-    let stderr = &output.stderr;
-    println!("--- stdout\n{:?}", std::str::from_utf8(stdout).unwrap());
-    println!("--- stderr\n{:?}", std::str::from_utf8(stderr).unwrap());
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    println!("--- stdout\n{:?}", stdout);
+    println!("--- stderr\n{:?}", stderr);
+
+    assert!(
+        stdout.contains("Hello World"),
+        "Failed to output Hello World"
+    );
+    cmd.assert().success();
 
     // Cleanup
     println!("====== Cleanup ======");
