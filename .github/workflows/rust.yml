@@ -10,15 +10,26 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_test:
 
     strategy:
       matrix:
-        compiler: [gcc, clang]
+        name: [gcc, clang]
+        include:
+          - cpp_compiler: g++
+            c_compielr: gcc
+            package: gcc
+          - cpp_compiler: clang++
+            c_compiler: clang
+            package: clang
+
 
     runs-on: ubuntu-latest
-
     steps:
+      environment:
+        - CXX: ${{ matrix.cpp_compiler }}
+        - CC: ${{ matrix.c_compiler }}
+
     - uses: actions/checkout@v3
 
     - name: Remove All compilers
@@ -29,7 +40,7 @@ jobs:
       run: sudo apt-get -y update && sudo apt-get -y upgrade
 
     - name: Install apt dependencies
-      run: sudo apt-get -y install ninja-build ${{ matrix.compiler }}
+      run: sudo apt-get -y install ninja-build ${{ matrix.package }}
 
     # - name: Python deps
     #   run: pip3 install ninja
