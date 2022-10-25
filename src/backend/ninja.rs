@@ -190,7 +190,6 @@ pub struct NinjaBackend {
     env: Environment,
 
     build: Build,
-
     build_to_src: PathBuf,
     src_to_build: PathBuf,
 
@@ -207,22 +206,21 @@ pub struct NinjaBackend {
 impl NinjaBackend {}
 
 impl Backend for NinjaBackend {
-    fn new(build: &Build) -> Self {
-        let bts = pathdiff::diff_paths(&build.environment.source_dir, &build.environment.build_dir)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Failed to get relative path between builddir ({:?}) and sourcedir ({:?})",
-                    &build.environment.build_dir, &build.environment.source_dir
-                )
-            });
-        let stb = pathdiff::diff_paths(&build.environment.build_dir, &build.environment.source_dir)
+    fn new(env: &Environment, build: &Build) -> Self {
+        let bts = pathdiff::diff_paths(&env.source_dir, &env.build_dir).unwrap_or_else(|| {
+            panic!(
+                "Failed to get relative path between builddir ({:?}) and sourcedir ({:?})",
+                env.build_dir, env.source_dir
+            )
+        });
+        let stb = pathdiff::diff_paths(&env.build_dir, &env.source_dir)
             .expect("Failed to get relative path between sourcedir and builddir");
 
         Self {
             build_to_src: bts,
             src_to_build: stb,
-            env: build.environment.clone(),
-            build: build.clone(),
+            env: env.to_owned(),
+            build: build.to_owned(),
             ..Default::default()
         }
     }
@@ -470,14 +468,14 @@ impl NinjaBackend {
 
     fn generate_compiler_rules(&mut self) {
         // for machine in MachineChoice::iter() {
-        // let clist = self.env.get_coredata().get_compilers().to_owned();
-        // for (lang, compiler) in &clist[&machine] {
-        // if compiler.get_id() == "clang" {}
-        let lang = "cpp";
-        let compiler = Compiler::new(vec!["/usr/bin/clang++".to_owned()], "");
-        self.generate_compile_rules_for(lang, compiler);
-        // self.generate_pch_rule_for(lang, compiler);
-        // }
+        let clist = self.env.coredata.compilers.to_owned();
+        for (lang, compiler) in clist {
+            // if compiler.get_id() == "clang" {}
+            // let lang = "cpp";
+            // let compiler = Compiler::new(vec!["/usr/bin/g++".to_owned()], "");
+            self.generate_compile_rules_for(&lang, &compiler);
+            // self.generate_pch_rule_for(lang, compiler);
+        }
         // }
     }
 
@@ -490,7 +488,7 @@ impl NinjaBackend {
         let commands = vec![
             "-I.".to_string(),
             "-I..".to_string(),
-            "-fcolor-diagnostics".to_string(),
+            // "-fcolor-diagnostics".to_string(),
             "-D_FILE_OFFSET_BITS=64".to_string(),
             "-Wall".to_string(),
             "-Winvalid-pch".to_string(),
@@ -528,9 +526,9 @@ impl NinjaBackend {
     ) -> NinjaObject {
         let linker_rule = format!("cpp_LINKER{}", self.get_rule_suffix(MachineChoice::Host));
         let commands = vec![
-            "-Wl,--as-needed".to_string(),
-            "-Wl".to_string(),
-            "--no-undefined".to_string(),
+            // "-Wl,--as-needed".to_string(),
+            // "-Wl".to_string(),
+            // "--no-undefined".to_string(),
         ];
 
         let mut elem = BuildElement::new(
@@ -580,7 +578,7 @@ impl NinjaBackend {
             langname,
             self.get_rule_suffix(MachineChoice::Host)
         );
-        let command = Command::String("/usr/bin/clang++".to_string());
+        let command = Command::String("/usr/bin/g++".to_string());
 
         let args = vec![
             Command::String("$ARGS".to_string()),
@@ -608,7 +606,7 @@ impl NinjaBackend {
         // }
     }
 
-    fn generate_compile_rules_for(&mut self, lang: &str, compiler: Compiler) {
+    fn generate_compile_rules_for(&mut self, lang: &str, compiler: &Compiler) {
         let rule = self.get_compiler_rule_name(lang, MachineChoice::Host);
         let command: Vec<Command> = compiler
             .get_exelist()
@@ -726,8 +724,8 @@ mod tests {
     fn test() {
         let env = Environment::new(&PathBuf::from("src"), &PathBuf::from("build"))
             .expect("Failed ot get environment");
-        let b = Build::new(env);
-        let n = NinjaBackend::new(&b);
+        let b = Build::new(env.clone());
+        let n = NinjaBackend::new(&env, &b);
         println!("{:?}", &n.build_to_src);
     }
 }

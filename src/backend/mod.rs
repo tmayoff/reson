@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
-use crate::build::Build;
+use crate::{build::Build, environment::Environment};
 
 pub mod ninja;
 
 mod build_element;
 
 pub trait Backend {
-    fn new(build: &Build) -> Self;
+    fn new(env: &Environment, build: &Build) -> Self;
 
     fn generate(&mut self);
 

@@ -34,7 +34,7 @@ pub struct BuildElement {
     pub rule: NinjaRule,
     pub outfilenames: Vec<PathBuf>,
 
-    all_outputs: Vec<bool>,
+    // all_outputs: Vec<bool>,
     implicit_outfilenames: Vec<PathBuf>,
     infilenames: Vec<PathBuf>,
     elems: Vec<(String, Vec<String>)>,
@@ -42,13 +42,13 @@ pub struct BuildElement {
 
 impl BuildElement {
     pub fn new(
-        all_outputs: &[bool],
+        _all_outputs: &[bool],
         outfilenames: &[PathBuf],
         rulename: &str,
         infilenames: &[PathBuf],
     ) -> Self {
         Self {
-            all_outputs: all_outputs.to_owned(),
+            // all_outputs: all_outputs.to_owned(),
             outfilenames: outfilenames.to_owned(),
             rulename: rulename.to_string(),
             infilenames: infilenames.to_owned(),
@@ -63,9 +63,6 @@ impl BuildElement {
 
 impl Display for BuildElement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // let filename = f.
-
-        // self.check_outputs();
         let ins: Vec<String> = self
             .infilenames
             .iter()

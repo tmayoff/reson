@@ -117,7 +117,7 @@ fn main() {
             interpreter.run();
 
             // Generate the build definitions for the specified backend
-            let mut backend = NinjaBackend::new(&interpreter.build);
+            let mut backend = NinjaBackend::new(&interpreter.environment, &interpreter.build);
             backend.generate();
         }
 

@@ -1,11 +1,11 @@
 use crate::backend::ninja::NinjaBackend;
 use crate::build::{BuildTarget, Target, TargetType};
 use crate::compiler::Compiler;
-use crate::coredata::CoreData;
 use crate::parser::parser::Parser;
 use crate::utils::MachineChoice;
 
 use core::panic;
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::{collections::HashMap, fs};
 
@@ -17,26 +17,23 @@ use crate::{
     BUILD_FILE_NAME,
 };
 
-use super::objects::{self, ElementaryTypes, HoldableTypes, ObjectTypes, ReturnedObjectTypes};
+use super::objects::{self, ElementaryTypes, HoldableTypes, ObjectTypes};
 use super::InterpreterTrait;
 
 #[derive(Default, Clone)]
 pub struct Interpreter {
     pub build: Build,
-    environment: Environment,
+    pub environment: Environment,
     pub backend: Option<NinjaBackend>,
-    coredata: CoreData,
-    summary: HashMap<String, String>,
-    options_file: PathBuf,
-
-    compilers: HashMap<String, Compiler>,
+    // summary: HashMap<String, String>,
+    // options_file: PathBuf,
+    // compilers: HashMap<String, Compiler>,
     builtin: HashMap<String, BuiltinTypes>,
     subdir: String,
-    active_projectname: String,
-    subproject: String,
-    subproject_dir: String,
-    subproject_directory_name: String,
-
+    // active_projectname: String,
+    // subproject: String,
+    // subproject_dir: String,
+    // subproject_directory_name: String,
     current_lineno: i32,
     argument_depth: i32,
 
@@ -48,16 +45,15 @@ impl InterpreterTrait for Interpreter {
         build: Build,
         _backend: Option<String>,
         subdir: Option<&str>,
-        subproject: Option<String>,
-        subproject_dir: Option<String>,
+        _subproject: Option<String>,
+        _subproject_dir: Option<String>,
     ) -> Result<Self, std::io::Error> {
         let mut s = Self {
-            coredata: build.environment.get_coredata().clone(),
             environment: build.environment.clone(),
             build,
             subdir: subdir.unwrap_or_default().to_owned(),
-            subproject: subproject.unwrap_or_default(),
-            subproject_dir: subproject_dir.unwrap_or_else(|| String::from("subprojects")),
+            // subproject: subproject.unwrap_or_default(),
+            // subproject_dir: subproject_dir.unwrap_or_else(|| String::from("subprojects")),
             ..Default::default()
         };
 
@@ -123,7 +119,7 @@ impl InterpreterTrait for Interpreter {
 
 impl Interpreter {
     fn redetect_machines(&mut self) {
-        // let machines = self.build.environment.machines;
+        // todo!()
     }
 
     fn sanity_check_ast(&mut self) {
@@ -497,19 +493,58 @@ impl Interpreter {
 
     fn add_languages(
         &mut self,
-        langs: &Vec<String>,
+        args: &[String],
+        required: bool,
+        for_machine: MachineChoice,
+    ) -> bool {
+        let success = self.add_languages_for(args, required, for_machine);
+        self.redetect_machines();
+        success
+    }
+
+    fn add_languages_for(
+        &mut self,
+        args: &[String],
         _required: bool,
         for_machine: MachineChoice,
     ) -> bool {
-        match for_machine {
-            MachineChoice::Build => {
-                for _lang in langs {
-                    // Compilers::detec_compiler_for(&self.environment, lang, for_machine);
+        let args: Vec<String> = args.iter().map(|a| a.to_lowercase()).collect();
+        let mut langs: BTreeSet<String> = self
+            .environment
+            .coredata
+            .compilers
+            .keys()
+            .map(|k| k.to_owned())
+            .collect();
+        langs.extend(args);
+
+        // let mut success = true;
+        for lang in langs {
+            if self.environment.coredata.compilers.contains_key(&lang) {
+                continue;
+            }
+
+            let compiler;
+            let compilers = &self.environment.coredata.compilers;
+
+            if compilers.contains_key(&lang) {
+                compiler = compilers[&lang].to_owned();
+            } else {
+                let compiler_candidate =
+                    Compiler::detect_compiler_for(&mut self.environment, &lang, &for_machine);
+
+                if let Some(c) = compiler_candidate {
+                    compiler = c;
+                } else {
+                    panic!("Tried to use an unknown language: {}", &lang);
                 }
             }
-            MachineChoice::Host => {
-                //
-            }
+
+            // Add to coredata
+            self.environment
+                .coredata
+                .compilers
+                .insert(lang.to_owned(), compiler.to_owned());
         }
 
         false
@@ -524,7 +559,7 @@ mod tests {
     #[test]
     fn simple_test() {
         let code = r"
-            project('test_proj', 'cpp', version: '0.1.1')
+            project('simple', 'cpp', version: '0.1')
 
             executable('simple', 'main.cpp')
         "
