@@ -14,11 +14,10 @@ jobs:
 
     strategy:
       matrix:
-        name: [gcc, clang]
         include:
           - CXX: g++
             CC: gcc
-            package: gcc
+            package: g++
           - CXX: clang++
             CC: clang
             package: clang
