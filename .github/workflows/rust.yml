@@ -23,9 +23,7 @@ jobs:
             CC: clang
             package: clang
 
-
     runs-on: ubuntu-latest
-    name: Testing Build with ${{ matrix.cpp_compiler }} 
     env:
       CXX: ${{ matrix.CXX }}
       CC: ${{ matrix.CC }}
