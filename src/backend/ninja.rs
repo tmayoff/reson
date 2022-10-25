@@ -572,38 +572,45 @@ impl NinjaBackend {
 
     fn generate_dynamic_link_rules(&mut self) {
         // for machine in MachineChoice::iter() {
-        let langname = "cpp";
-        let rule = format!(
-            "{}_LINKER{}",
-            langname,
-            self.get_rule_suffix(MachineChoice::Host)
-        );
-        let command = Command::String("/usr/bin/g++".to_string());
+        let compilers = self.env.coredata.compilers.to_owned();
+        for (_lang, compiler) in compilers {
+            let langname = "cpp";
+            let rule = format!(
+                "{}_LINKER{}",
+                langname,
+                self.get_rule_suffix(MachineChoice::Host)
+            );
 
-        let args = vec![
-            Command::String("$ARGS".to_string()),
-            Command::CommandArg(NinjaCommandArg {
-                arg: "-o $out".to_string(),
-                quoting: Quoting::None,
-            }),
-            Command::String("$in".to_string()),
-            Command::String("$LINK_ARGS".to_string()),
-        ];
+            let command: Vec<Command> = compiler
+                .get_exelist()
+                .iter()
+                .map(|c| Command::String(c.to_owned()))
+                .collect();
 
-        let description = "Linking target $out".to_string();
+            let args = vec![
+                Command::String("$ARGS".to_string()),
+                Command::CommandArg(NinjaCommandArg {
+                    arg: "-o $out".to_string(),
+                    quoting: Quoting::None,
+                }),
+                Command::String("$in".to_string()),
+                Command::String("$LINK_ARGS".to_string()),
+            ];
 
-        let rule = NinjaRule::new(
-            rule.as_str(),
-            &[command],
-            &args,
-            &description,
-            None,
-            None,
-            None,
-        );
+            let description = "Linking target $out".to_string();
 
-        self.add_rule(&NinjaObject::Rule(rule));
-        // }
+            let rule = NinjaRule::new(
+                rule.as_str(),
+                &command,
+                &args,
+                &description,
+                None,
+                None,
+                None,
+            );
+
+            self.add_rule(&NinjaObject::Rule(rule));
+        }
     }
 
     fn generate_compile_rules_for(&mut self, lang: &str, compiler: &Compiler) {
