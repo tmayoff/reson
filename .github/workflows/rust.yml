@@ -25,11 +25,12 @@ jobs:
 
 
     runs-on: ubuntu-latest
-    steps:
-      environment:
-        - CXX: ${{ matrix.cpp_compiler }}
-        - CC: ${{ matrix.c_compiler }}
 
+    environment:
+      - CXX: ${{ matrix.cpp_compiler }}
+      - CC: ${{ matrix.c_compiler }}
+
+    steps:
     - uses: actions/checkout@v3
 
     - name: Remove All compilers
