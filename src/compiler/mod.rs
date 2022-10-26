@@ -1,10 +1,10 @@
 mod cpp;
 
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 use assert_cmd::prelude::OutputAssertExt;
 
-use crate::{environment::Environment, utils::MachineChoice};
+use crate::{environment::Environment, interpreter::file::File, utils::MachineChoice};
 
 use self::cpp::CPPCompiler;
 
@@ -37,6 +37,18 @@ impl Compiler {
 
     pub fn get_exelist(&self) -> &Vec<String> {
         &self.exelist
+    }
+
+    pub fn can_compile(&self, src: &File) -> bool {
+        let path = PathBuf::from(src.filename.to_owned());
+        let extension = path.extension();
+        match extension {
+            Some(e) => match &self.compiler_type {
+                CompilerType::CCompiler => e == "c",
+                CompilerType::CPPCompiler(_) => e == "cpp",
+            },
+            None => false,
+        }
     }
 
     pub fn detect_compiler_for(

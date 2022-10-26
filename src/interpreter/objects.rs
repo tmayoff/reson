@@ -8,12 +8,6 @@ pub enum ObjectTypes {
 }
 
 #[derive(Clone)]
-pub enum HoldableTypes {
-    Returned(ReturnedObjectTypes),
-    Elementary(ElementaryTypes),
-}
-
-#[derive(Clone)]
 pub enum BuiltinTypes {}
 
 #[derive(Clone)]
@@ -22,7 +16,7 @@ pub enum ElementaryTypes {
     Bool(bool),
     Dict,
     Int(i32),
-    List,
+    List(Vec<ElementaryTypes>),
     Str(String),
 }
 
@@ -31,10 +25,10 @@ pub enum ReturnedObjectTypes {
     File(File),
 }
 
-pub fn unholder(object: ObjectTypes) -> HoldableTypes {
+pub fn unholder(object: &ObjectTypes) -> ElementaryTypes {
     match object {
         ObjectTypes::Builtin(_) => todo!(),
         ObjectTypes::Returned(_) => todo!(),
-        ObjectTypes::Elementary(e) => HoldableTypes::Elementary(e),
+        ObjectTypes::Elementary(e) => e.to_owned(),
     }
 }

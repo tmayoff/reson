@@ -4,8 +4,7 @@ use crate::compiler::Compiler;
 use crate::parser::parser::Parser;
 use crate::utils::MachineChoice;
 
-use core::panic;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::{collections::HashMap, fs};
 
@@ -17,7 +16,7 @@ use crate::{
     BUILD_FILE_NAME,
 };
 
-use super::objects::{self, ElementaryTypes, HoldableTypes, ObjectTypes};
+use super::objects::{self, unholder, ElementaryTypes, ObjectTypes};
 use super::InterpreterTrait;
 
 #[derive(Default, Clone)]
@@ -156,7 +155,7 @@ impl Interpreter {
             NodeType::BoolNode { value } => todo!(),
             NodeType::IDNode { value } => todo!(),
             NodeType::NumberNode { value } => todo!(),
-            NodeType::StringNode { value } => Some(self.holderify(HoldableTypes::Elementary(
+            NodeType::StringNode { value } => Some(self.holderify(ObjectTypes::Elementary(
                 ElementaryTypes::Str(value.to_owned()),
             ))),
             NodeType::FStringNode { value } => todo!(),
@@ -164,7 +163,7 @@ impl Interpreter {
             NodeType::ContinueNode => todo!(),
             NodeType::BreakNode => todo!(),
             NodeType::ArgumentNode(_) => todo!(),
-            NodeType::ArrayNode { args } => todo!(),
+            NodeType::ArrayNode { args } => self.evaluate_arraystatement(args),
             NodeType::DictNode { args } => todo!(),
             NodeType::EmptyNode => todo!(),
             NodeType::OrNode { left, right } => todo!(),
@@ -197,33 +196,40 @@ impl Interpreter {
         }
     }
 
-    fn function_call(
-        &mut self,
-        node: &Node,
-        func_name: &String,
-        args: &Node,
-    ) -> Option<ObjectTypes> {
+    fn function_call(&mut self, _node: &Node, func_name: &str, args: &Node) -> Option<ObjectTypes> {
         let (h_posargs, h_kwargs) = self.reduce_arguments(args);
         let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
 
-        let res = self.process_func(func_name.clone(), args, posargs, kwargs);
+        let _res = self.process_func(func_name, args, posargs, kwargs);
 
         None
     }
 
-    fn holderify(&self, value: HoldableTypes) -> ObjectTypes {
+    fn evaluate_arraystatement(&mut self, args: &Node) -> Option<ObjectTypes> {
+        let (args, kwargs) = self.reduce_arguments(args);
+        if !kwargs.is_empty() {
+            panic!("Keywork arguments are invalid in array construction");
+        }
+
+        let args = args.iter().map(unholder).collect();
+
+        Some(ObjectTypes::Elementary(ElementaryTypes::List(args)))
+    }
+
+    fn holderify(&self, value: ObjectTypes) -> ObjectTypes {
         match value {
-            HoldableTypes::Returned(r) => match r {
+            ObjectTypes::Returned(r) => match r {
                 objects::ReturnedObjectTypes::File(_) => todo!(),
             },
-            HoldableTypes::Elementary(v) => match v {
+            ObjectTypes::Elementary(v) => match v {
                 ElementaryTypes::Void => todo!(),
                 ElementaryTypes::Bool(_) => todo!(),
                 ElementaryTypes::Dict => todo!(),
                 ElementaryTypes::Int(_) => todo!(),
-                ElementaryTypes::List => todo!(),
+                ElementaryTypes::List(_) => todo!(),
                 ElementaryTypes::Str(s) => ObjectTypes::Elementary(ElementaryTypes::Str(s)),
             },
+            ObjectTypes::Builtin(_) => todo!(),
             // HoldableTypes::Bool(_) => todo!(),
             // HoldableTypes::Str(str) => InterpreterObject::object_holder(HoldableTypes::Str(str)),
             // HoldableTypes::Int(_) => todo!(),
@@ -239,18 +245,15 @@ impl Interpreter {
         &self,
         args: Vec<ObjectTypes>,
         kwargs: HashMap<String, ObjectTypes>,
-    ) -> (Vec<HoldableTypes>, HashMap<String, HoldableTypes>) {
-        let a = args.into_iter().map(objects::unholder).collect();
+    ) -> (Vec<ElementaryTypes>, HashMap<String, ElementaryTypes>) {
+        let a = args.into_iter().map(|a| objects::unholder(&a)).collect();
+
         let k = kwargs
             .into_iter()
-            .map(|a| (a.0, objects::unholder(a.1)))
+            .map(|a| (a.0, objects::unholder(&a.1)))
             .collect();
 
         (a, k)
-    }
-
-    fn unknown_function_call(func_name: &String) {
-        panic!("Unknown function '{}'", func_name);
     }
 
     fn reduce_arguments(
@@ -292,12 +295,12 @@ impl Interpreter {
         &self,
         kwargs: HashMap<String, ObjectTypes>,
     ) -> HashMap<String, ObjectTypes> {
-        let mut newkwargs = kwargs;
+        let newkwargs = kwargs;
         if !newkwargs.contains_key("kwargs") {
             return newkwargs;
         }
 
-        let to_expand = objects::unholder(newkwargs.remove("kwargs").expect("kwargs expected"));
+        // let to_expand = objects::unholder(newkwargs.remove("kwargs").expect("kwargs expected"));
         // assert!(matches!(to_expand, HoldableTypes::Dict));
         // assert!()
         // TODO fill this out
@@ -320,12 +323,12 @@ impl Interpreter {
 
     fn process_func(
         &mut self,
-        func_name: String,
+        func_name: &str,
         node: &Node,
-        posargs: Vec<HoldableTypes>,
-        kwargs: HashMap<String, HoldableTypes>,
-    ) -> Option<HoldableTypes> {
-        match func_name.as_str() {
+        posargs: Vec<ElementaryTypes>,
+        kwargs: HashMap<String, ElementaryTypes>,
+    ) -> Option<ElementaryTypes> {
+        match func_name {
             "project" => {
                 self.func_project(node, posargs, kwargs);
                 None
@@ -334,15 +337,15 @@ impl Interpreter {
                 self.func_executable(node, posargs, kwargs);
                 None
             }
-            _ => panic!("Unknown function"),
+            _ => panic!("Unknown function {}", func_name),
         }
     }
 
     fn func_project(
         &mut self,
         _node: &Node,
-        args: Vec<HoldableTypes>,
-        kwargs: HashMap<String, HoldableTypes>,
+        args: Vec<ElementaryTypes>,
+        kwargs: HashMap<String, ElementaryTypes>,
     ) {
         // Kwargs used in project function
         struct ProjectKwargs {
@@ -362,28 +365,33 @@ impl Interpreter {
             args.len() >= 2,
             "project function requires at least 'project name' and 'language'"
         );
-        assert!(matches!(
-            args[0],
-            HoldableTypes::Elementary(ElementaryTypes::Str(_))
-        ));
+        assert!(matches!(args[0], ElementaryTypes::Str(_)));
         assert!(
-            matches!(args[1], HoldableTypes::Elementary(ElementaryTypes::Str(_))) // || matches!(args[1], HoldableTypes::VecStr(_))
+            matches!(args[1], ElementaryTypes::Str(_))
+                || matches!(args[1], ElementaryTypes::List(_))
         );
 
-        let project_name =
-            if let HoldableTypes::Elementary(ElementaryTypes::Str(project_name)) = &args[0] {
-                project_name.clone()
-            } else {
-                String::new()
-            };
-
-        let project_langs = if let HoldableTypes::Elementary(ElementaryTypes::Str(lang)) = &args[1]
-        {
-            vec![lang.to_owned()]
-        // } else if let HoldableTypes::VecStr(langs) = &args[1] {
-        //     langs.clone()
+        let project_name = if let ElementaryTypes::Str(project_name) = &args[0] {
+            project_name.clone()
         } else {
-            Vec::new()
+            String::new()
+        };
+
+        let project_langs = match &args[1] {
+            ElementaryTypes::List(langs_list) => {
+                //
+                let mut langs = Vec::new();
+
+                for l in langs_list {
+                    if let ElementaryTypes::Str(s) = l {
+                        langs.push(s.to_owned());
+                    }
+                }
+
+                langs
+            }
+            ElementaryTypes::Str(s) => vec![s.to_owned()],
+            _ => panic!("Unknown arguments"),
         };
 
         assert!(
@@ -393,14 +401,14 @@ impl Interpreter {
 
         // TODO process meson_options.txt
 
-        self.build.project_name = project_name.clone();
-
-        if let HoldableTypes::Elementary(ElementaryTypes::Str(v)) = &kwargs["version"] {
-            project_args.version = Some(v.clone());
-        }
-
         info!("Project Name: {}", &project_name);
         info!("Project version: {:?}", project_args.version);
+
+        self.build.project_name = project_name;
+
+        if let ElementaryTypes::Str(v) = &kwargs["version"] {
+            project_args.version = Some(v.to_string());
+        }
 
         self.add_languages(&project_langs, true, MachineChoice::Host);
         self.add_languages(&project_langs, false, MachineChoice::Build);
@@ -409,8 +417,8 @@ impl Interpreter {
     fn func_executable(
         &mut self,
         node: &Node,
-        args: Vec<HoldableTypes>,
-        kwargs: HashMap<String, HoldableTypes>,
+        args: Vec<ElementaryTypes>,
+        kwargs: HashMap<String, ElementaryTypes>,
     ) {
         let mut build_target = TargetType::BuildTarget(BuildTarget::new());
 
@@ -420,8 +428,8 @@ impl Interpreter {
     fn build_target(
         &mut self,
         _node: &Node,
-        args: Vec<HoldableTypes>,
-        _kwargs: HashMap<String, HoldableTypes>,
+        args: Vec<ElementaryTypes>,
+        _kwargs: HashMap<String, ElementaryTypes>,
         targetclass: &mut TargetType,
     ) {
         if args.is_empty() {
@@ -431,7 +439,7 @@ impl Interpreter {
 
         let holdable = sources.remove(0);
         let mut name = String::new();
-        if let HoldableTypes::Elementary(ElementaryTypes::Str(n)) = holdable {
+        if let ElementaryTypes::Str(n) = holdable {
             name = n;
         }
 
@@ -479,11 +487,11 @@ impl Interpreter {
         // TODO Others
     }
 
-    fn source_strings_to_files(&self, sources: &[HoldableTypes]) -> Vec<File> {
+    fn source_strings_to_files(&self, sources: &[ElementaryTypes]) -> Vec<File> {
         let mut files = Vec::new();
 
         for s in sources {
-            if let HoldableTypes::Elementary(ElementaryTypes::Str(source)) = s {
+            if let ElementaryTypes::Str(source) = s {
                 files.push(File::new(source.as_str()));
             }
         }

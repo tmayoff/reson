@@ -3,10 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::utils::PerMachine;
 use crate::{coredata::CoreData, utils::MachineChoice};
 use lazy_static::lazy_static;
-use strum::IntoEnumIterator;
 
 const PRIVATE_DIR: &str = "meson-private";
 const LOG_DIR: &str = "meson-logs";
@@ -62,10 +60,6 @@ impl Environment {
             Ok(p) => p,
             Err(_) => panic!("Binary can't be found"),
         }
-    }
-
-    pub fn get_build_dir(&self) -> &PathBuf {
-        &self.build_dir
     }
 
     fn set_default_binaries_from_env(&mut self) {

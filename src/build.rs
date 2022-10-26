@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use crate::{environment::Environment, interpreter::file::File};
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct BuildTarget {
     pub filename: String,
 }
@@ -11,7 +11,7 @@ impl BuildTarget {
     pub fn new() -> Self {
         Self {
             filename: "no_name".to_owned(),
-            ..Default::default()
+            // ..Default::default()
         }
     }
 
@@ -40,7 +40,7 @@ impl BuildTarget {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum TargetType {
     BuildTarget(BuildTarget),
     CustomTarget,

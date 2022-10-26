@@ -1,5 +1,7 @@
 use strum_macros::EnumIter;
 
+use crate::{compiler::Compiler, interpreter::file::File};
+
 #[derive(Clone, PartialEq, Eq, Hash, EnumIter)]
 pub enum MachineChoice {
     Build,
@@ -30,4 +32,14 @@ impl<T> PerMachine<T> {
             MachineChoice::Host => self.host = val,
         }
     }
+}
+
+pub fn get_compiler_for(compilers: &[Compiler], src: &File) -> Compiler {
+    for comp in compilers {
+        if comp.can_compile(src) {
+            return comp.to_owned();
+        }
+    }
+
+    panic!("No specified compiler can handle file {}", src);
 }

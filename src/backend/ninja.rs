@@ -10,7 +10,7 @@ use crate::build::{Build, Target, TargetType};
 use crate::compiler::Compiler;
 use crate::environment::{self, Environment};
 use crate::interpreter::file::File;
-use crate::utils::{MachineChoice, PerMachine};
+use crate::utils::{get_compiler_for, MachineChoice, PerMachine};
 
 const RAW_NAMES: [&str; 6] = [
     "DEPFILE_UNQUOTED",
@@ -191,7 +191,7 @@ pub struct NinjaBackend {
 
     build: Build,
     build_to_src: PathBuf,
-    src_to_build: PathBuf,
+    _src_to_build: PathBuf,
 
     rules: Vec<NinjaObject>,
     rule_dict: HashMap<String, NinjaObject>,
@@ -218,7 +218,7 @@ impl Backend for NinjaBackend {
 
         Self {
             build_to_src: bts,
-            src_to_build: stb,
+            _src_to_build: stb,
             env: env.to_owned(),
             build: build.to_owned(),
             ..Default::default()
@@ -226,7 +226,7 @@ impl Backend for NinjaBackend {
     }
 
     fn generate(&mut self) {
-        let ninja = environment::Environment::get_ninja_command_and_version(None, None);
+        let _ninja = environment::Environment::get_ninja_command_and_version(None, None);
         let mut outfilename = self.env.build_dir.clone();
         outfilename.push("build.ninja");
         let mut tmpfilename = self.env.build_dir.clone();
@@ -467,16 +467,11 @@ impl NinjaBackend {
     // }
 
     fn generate_compiler_rules(&mut self) {
-        // for machine in MachineChoice::iter() {
         let clist = self.env.coredata.compilers.to_owned();
         for (lang, compiler) in clist {
-            // if compiler.get_id() == "clang" {}
-            // let lang = "cpp";
-            // let compiler = Compiler::new(vec!["/usr/bin/g++".to_owned()], "");
             self.generate_compile_rules_for(&lang, &compiler);
             // self.generate_pch_rule_for(lang, compiler);
         }
-        // }
     }
 
     fn generate_single_compile(&mut self, target: &Target, src: &File) -> (PathBuf, PathBuf) {
@@ -485,20 +480,10 @@ impl NinjaBackend {
 
         let rel_src = src.rel_to_builddir(&self.build_to_src);
 
-        let commands = vec![
-            "-I.".to_string(),
-            "-I..".to_string(),
-            // "-fcolor-diagnostics".to_string(),
-            "-D_FILE_OFFSET_BITS=64".to_string(),
-            "-Wall".to_string(),
-            "-Winvalid-pch".to_string(),
-            "-Wnon-virtual-dtor".to_string(),
-            "-Wextra".to_string(),
-            "-Wpedantic".to_string(),
-            "-std=c++14".to_string(),
-            "-O0".to_string(),
-            "-g".to_string(),
-        ];
+        let compilers: Vec<Compiler> = self.env.coredata.compilers.values().cloned().collect();
+        let compiler = get_compiler_for(&compilers, src);
+
+        let commands = self.generate_single_compile_base_args(target, &compiler);
 
         let mut elem = BuildElement::new(
             &self.all_outputs,
@@ -571,10 +556,8 @@ impl NinjaBackend {
     }
 
     fn generate_dynamic_link_rules(&mut self) {
-        // for machine in MachineChoice::iter() {
         let compilers = self.env.coredata.compilers.to_owned();
-        for (_lang, compiler) in compilers {
-            let langname = "cpp";
+        for (langname, compiler) in compilers {
             let rule = format!(
                 "{}_LINKER{}",
                 langname,
@@ -639,6 +622,17 @@ impl NinjaBackend {
             Some(depfile),
             None,
         )));
+    }
+
+    fn generate_single_compile_base_args(
+        &self,
+        _target: &Target,
+        _compiler: &Compiler,
+    ) -> Vec<String> {
+        // let base_proxy;
+        // let mut commands = Vec::new();
+
+        Vec::new()
     }
 
     fn process_target_dependencies(&mut self, target: &Target) {
