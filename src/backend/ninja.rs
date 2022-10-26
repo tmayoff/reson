@@ -644,22 +644,10 @@ impl NinjaBackend {
     }
 
     fn get_object_filename_from_source(&self, _target: &Target, source: &File) -> PathBuf {
-        let build_dir = &self.env.build_dir;
-        let mut rel_src = build_dir.join(&source.filename);
-        if rel_src.is_absolute() {
-            rel_src.set_extension("o");
-            return rel_src;
-        }
-
-        let gen_source = pathdiff::diff_paths(build_dir.join(rel_src), &self.env.source_dir)
-            .expect("Failed to get relative path");
-
-        let mut gen_source = gen_source
-            .canonicalize()
-            .expect("Failed to canonicalize source");
-        gen_source.set_extension("o");
-
-        gen_source
+        let mut p = String::from(&source.filename);
+        p.push('.');
+        p.push('o');
+        PathBuf::from(p)
     }
 
     fn get_target_sources(&self, target: &Target) -> HashMap<PathBuf, File> {
