@@ -35,6 +35,21 @@ impl Compiler {
         }
     }
 
+    pub fn get_base_args(compiler: &Compiler) -> Vec<String> {
+        let mut args = Vec::new();
+
+        // LTO
+
+        // Colour out
+        args.append(&mut compiler.get_colourout_args());
+
+        args
+    }
+
+    fn get_colourout_args(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     pub fn get_exelist(&self) -> &Vec<String> {
         &self.exelist
     }

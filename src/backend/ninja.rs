@@ -483,7 +483,9 @@ impl NinjaBackend {
         let compilers: Vec<Compiler> = self.env.coredata.compilers.values().cloned().collect();
         let compiler = get_compiler_for(&compilers, src);
 
-        let commands = self.generate_single_compile_base_args(target, &compiler);
+        let mut commands = self.generate_single_compile_base_args(target, &compiler);
+
+        commands.append(&mut self.generate_single_compile_target_args(target, &compiler));
 
         let mut elem = BuildElement::new(
             &self.all_outputs,
@@ -492,8 +494,12 @@ impl NinjaBackend {
             &[rel_src.to_owned()],
         );
 
-        elem.add_item("DEPFILE", &["simple.p/main.cpp.o.d".to_owned()]);
-        elem.add_item("DEPFILE_UNQUOTED", &["simple.p/main.cpp.o.d".to_owned()]);
+        let mut depfile = rel_obj.to_str().unwrap_or_default().to_string();
+        depfile.push('.');
+        depfile.push('d');
+
+        elem.add_item("DEPFILE", &[depfile.to_owned()]);
+        elem.add_item("DEPFILE_UNQUOTED", &[depfile]);
         elem.add_item("ARGS", &commands);
 
         self.add_build(&mut NinjaObject::BuildElement(elem));
@@ -627,11 +633,18 @@ impl NinjaBackend {
     fn generate_single_compile_base_args(
         &self,
         _target: &Target,
+        compiler: &Compiler,
+    ) -> Vec<String> {
+        // Other things here
+
+        Compiler::get_base_args(compiler)
+    }
+
+    fn generate_single_compile_target_args(
+        &self,
+        _target: &Target,
         _compiler: &Compiler,
     ) -> Vec<String> {
-        // let base_proxy;
-        // let mut commands = Vec::new();
-
         Vec::new()
     }
 

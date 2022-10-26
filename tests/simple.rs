@@ -103,7 +103,7 @@ fn test1() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- stderr\n{:?}", stderr);
 
     assert!(
-        stdout.contains("Hello World"),
+        stdout.contains("Value is: 20"),
         "Failed to output Hello World"
     );
     cmd.assert().success();
