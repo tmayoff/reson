@@ -1,12 +1,19 @@
 mod cpp;
 
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use assert_cmd::prelude::OutputAssertExt;
 
 use crate::{environment::Environment, interpreter::file::File, utils::MachineChoice};
 
 use self::cpp::CPPCompiler;
+
+trait CompilerTypeTrait {
+    fn get_depfile_suffix(&self) -> String;
+}
 
 #[derive(Clone, Default)]
 pub enum CompilerType {
@@ -32,6 +39,33 @@ impl Compiler {
             version: version.to_owned(),
             compiler_type: compiler_type.to_owned(),
             ..Default::default()
+        }
+    }
+
+    pub fn depfile_for_object(&self, object: &Path) -> String {
+        format!("{}.{}", object.to_string_lossy(), self.get_depfile_suffix())
+    }
+
+    pub fn get_language(&self) -> String {
+        match self.compiler_type {
+            CompilerType::CCompiler => todo!(),
+            CompilerType::CPPCompiler(_) => String::from("cpp"),
+        }
+    }
+
+    pub fn get_compiler_rule_name(&self, lang: &str, mode: Option<&str>) -> String {
+        let mode = mode.unwrap_or("COMPILER");
+
+        match self.compiler_type {
+            CompilerType::CCompiler => todo!(),
+            CompilerType::CPPCompiler(_) => format!("{}_{}", lang, mode),
+        }
+    }
+
+    pub fn get_depfile_suffix(&self) -> String {
+        match &self.compiler_type {
+            CompilerType::CCompiler => todo!(),
+            CompilerType::CPPCompiler(cpp) => cpp.get_depfile_suffix(),
         }
     }
 

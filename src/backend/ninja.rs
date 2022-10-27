@@ -402,7 +402,7 @@ impl NinjaBackend {
         let mut obj_list = Vec::new();
 
         for src in target_sources.values() {
-            let (o, s) = self.generate_single_compile(target, src);
+            let (o, _) = self.generate_single_compile(target, src);
             obj_list.push(o);
         }
 
@@ -483,6 +483,8 @@ impl NinjaBackend {
         let compilers: Vec<Compiler> = self.env.coredata.compilers.values().cloned().collect();
         let compiler = get_compiler_for(&compilers, src);
 
+        let dep_file = compiler.depfile_for_object(&rel_obj);
+
         let mut commands = self.generate_single_compile_base_args(target, &compiler);
 
         commands.append(&mut self.generate_single_compile_target_args(target, &compiler));
@@ -490,16 +492,12 @@ impl NinjaBackend {
         let mut elem = BuildElement::new(
             &self.all_outputs,
             &[rel_obj.to_owned()],
-            "cpp_COMPILER",
+            &self.compiler_to_rulename(&compiler),
             &[rel_src.to_owned()],
         );
 
-        let mut depfile = rel_obj.to_str().unwrap_or_default().to_string();
-        depfile.push('.');
-        depfile.push('d');
-
-        elem.add_item("DEPFILE", &[depfile.to_owned()]);
-        elem.add_item("DEPFILE_UNQUOTED", &[depfile]);
+        elem.add_item("DEPFILE", &[dep_file.clone()]);
+        elem.add_item("DEPFILE_UNQUOTED", &[dep_file]);
         elem.add_item("ARGS", &commands);
 
         self.add_build(&mut NinjaObject::BuildElement(elem));
@@ -646,6 +644,10 @@ impl NinjaBackend {
         _compiler: &Compiler,
     ) -> Vec<String> {
         Vec::new()
+    }
+
+    fn compiler_to_rulename(&self, compiler: &Compiler) -> String {
+        compiler.get_compiler_rule_name(&compiler.get_language(), None)
     }
 
     fn process_target_dependencies(&mut self, target: &Target) {
