@@ -1,3 +1,4 @@
-project('test1', 'cpp', version: '0.1')
+project('test2', 'cpp', version: '0.1')
 
-executable('test1', 'main.cpp', 'math.cpp')
+lib = library('math', 'math.cpp')
+executable('test2', 'main.cpp', link_with: lib)

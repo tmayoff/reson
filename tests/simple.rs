@@ -151,7 +151,7 @@ fn test2() -> Result<(), Box<dyn std::error::Error>> {
 
     // ==== Run ===== //
     println!("======= Running ===== ");
-    let mut cmd = Command::new("./test1");
+    let mut cmd = Command::new("./test2");
     cmd.current_dir(&build_dir);
     let output = &cmd.output().expect("Failed to get output of command");
     let stdout = std::str::from_utf8(&output.stdout).unwrap();
