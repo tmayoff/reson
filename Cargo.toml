@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 assert_cmd = "2.0.4"
-chrono = "0.4.22"
+chrono = "0.4.24"
 clap = { version = "4.0.12", features = ["derive"] }
 env_logger = "0.9.1"
 file_diff = "1.0.0"
