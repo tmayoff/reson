@@ -31,12 +31,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Update apt
+      run: sudo apt-get -y update
+
     - name: Remove All compilers
       run: sudo apt remove gcc clang
       continue-on-error: true
-
-    - name: Update apt
-      run: sudo apt-get -y update && sudo apt-get -y upgrade
 
     - name: Install apt dependencies
       run: sudo apt-get -y install ninja-build ${{ matrix.package }}
