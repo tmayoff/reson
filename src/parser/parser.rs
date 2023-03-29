@@ -1,47 +1,45 @@
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Range;
 use std::rc::Rc;
 
 use crate::parser::node::Node;
-use crate::parser::token::TokenType;
+use crate::parser::token::Token;
 use lazy_static::lazy_static;
 
-use super::lexer::Lexer;
 use super::node::NodeType;
-use super::token::{Token, TokenValue};
+use logos::{Logos, SpannedIter};
 
 #[derive(Debug)]
 enum ParserError {}
 
-pub struct Parser {
-    lexer: Lexer,
-
-    current_tok: Token,
-
+pub struct Parser<'a> {
+    lexer: SpannedIter<'a, Token>,
+    source: &'a str,
+    current_tok: (Token, Range<usize>),
     in_ternary: bool,
 }
 
 lazy_static! {
-    static ref COMPARISON_MAP: BTreeMap<TokenType, &'static str> = BTreeMap::from([
-        (TokenType::Equal, "=="),
-        (TokenType::NEqual, "!="),
-        (TokenType::LT, "<"),
-        (TokenType::LE, "<="),
-        (TokenType::GT, ">"),
-        (TokenType::GE, ">="),
-        (TokenType::In, "in"),
-        (TokenType::NotIn, "not in"),
+    static ref COMPARISON_MAP: BTreeMap<Token, &'static str> = BTreeMap::from([
+        (Token::Equal, "=="),
+        (Token::NEqual, "!="),
+        (Token::LT, "<"),
+        (Token::LE, "<="),
+        (Token::GT, ">"),
+        (Token::GE, ">="),
+        (Token::In, "in"),
+        (Token::NotIn, "not in"),
     ]);
 }
 
-impl Parser {
-    pub fn new(code: String, filename: String) -> Self {
-        let lexer = Lexer::new(code, filename);
-
-        let current_tok = Token::new(TokenType::EOF, "", 0, 0, 0, TokenValue::None);
+impl<'a> Parser<'a> {
+    pub fn new(code: &'a str, _filename: &str) -> Self {
+        let lex = Token::lexer(code).spanned();
 
         let mut p = Parser {
-            lexer,
-            current_tok,
+            lexer: lex,
+            source: code,
+            current_tok: (Token::EOF, Range::default()),
             in_ternary: false,
         };
 
@@ -53,21 +51,21 @@ impl Parser {
     fn getsym(&mut self) {
         let t = self.lexer.next();
         match t {
-            Ok(t) => self.current_tok = t,
-            Err(_) => todo!(),
+            Some(t) => self.current_tok = t,
+            None => self.current_tok = (Token::EOF, Range::default()),
         }
     }
 
-    fn accept(&mut self, tok: TokenType) -> bool {
-        if self.current_tok.tid == tok {
+    fn accept(&mut self, tok: Token) -> bool {
+        if std::mem::discriminant(&self.current_tok.0) == std::mem::discriminant(&tok) {
             self.getsym();
             return true;
         }
         false
     }
 
-    fn accept_any(&mut self, tids: Vec<TokenType>) -> Option<TokenType> {
-        let tid = self.current_tok.tid.clone();
+    fn accept_any(&mut self, tids: Vec<Token>) -> Option<Token> {
+        let tid = self.current_tok.0.clone();
         if tids.contains(&tid) {
             self.getsym();
             return Some(tid);
@@ -76,17 +74,22 @@ impl Parser {
         None
     }
 
-    fn expect(&mut self, tok: TokenType) {
-        assert!(self.accept(tok));
+    fn expect(&mut self, tok: Token) {
+        assert!(self.accept(tok.clone()), "Expected token {:?}", &tok);
     }
 
-    fn block_expect(&mut self, tok: TokenType, _block_start: &Token) {
-        assert!(self.accept(tok));
+    fn block_expect(&mut self, tok: Token, _block_start: &Token) {
+        assert!(
+            self.accept(tok.clone()),
+            "Expected token {:?}, block started: {:?}",
+            &tok,
+            &_block_start
+        );
     }
 
     pub fn parse(&mut self) -> Node {
         let n = self.codeblock();
-        self.expect(TokenType::EOF);
+        self.expect(Token::EOF);
         n
     }
 
@@ -111,7 +114,7 @@ impl Parser {
 
     fn e1(&mut self) -> Node {
         let left = self.e2();
-        if self.accept(TokenType::PlusAssign) {
+        if self.accept(Token::PlusAssign) {
             let value = self.e1();
             if !matches!(left.node_type, NodeType::IDNode { .. }) {
                 panic!("Plus Assignment target must be an ID");
@@ -119,36 +122,30 @@ impl Parser {
 
             if let NodeType::IDNode { value: var_name } = &left.node_type {
                 return Node::plusassignment_node(
-                    left.filename.to_owned(),
-                    left.lineno,
-                    left.colno,
+                    "".to_string(),
+                    0,
+                    0,
                     var_name.to_owned(),
                     &value,
                 );
             }
-        } else if self.accept(TokenType::Assign) {
+        } else if self.accept(Token::Assign) {
             let value = self.e1();
             if !matches!(left.node_type, NodeType::IDNode { .. }) {
                 panic!("Assignment target must be an ID");
             }
 
             if let NodeType::IDNode { value: var_name } = &left.node_type {
-                return Node::assignment_node(
-                    left.filename.to_owned(),
-                    left.lineno,
-                    left.colno,
-                    var_name.to_string(),
-                    &value,
-                );
+                return Node::assignment_node("".to_owned(), 0, 0, var_name.to_string(), &value);
             }
-        } else if self.accept(TokenType::QuestionMark) {
+        } else if self.accept(Token::QuestionMark) {
             if self.in_ternary {
                 panic!("Nested ternary operators are not allowed");
             }
 
             self.in_ternary = true;
             let trueblock = self.e1();
-            self.expect(TokenType::Colon);
+            self.expect(Token::Colon);
             let falseblock = self.e1();
             self.in_ternary = false;
             return Node::ternary_node(&left, &trueblock, &falseblock);
@@ -160,7 +157,7 @@ impl Parser {
     fn e2(&mut self) -> Node {
         let mut left = self.e3();
 
-        while self.accept(TokenType::Or) {
+        while self.accept(Token::Or) {
             if left.node_type == NodeType::EmptyNode {
                 panic!("Invalid and clause.");
             }
@@ -174,7 +171,7 @@ impl Parser {
     fn e3(&mut self) -> Node {
         let mut left = self.e4();
 
-        while self.accept(TokenType::And) {
+        while self.accept(Token::And) {
             if left.node_type == NodeType::EmptyNode {
                 panic!("Invalid and clause.");
             }
@@ -194,7 +191,7 @@ impl Parser {
             }
         }
 
-        if self.accept(TokenType::Not) && self.accept(TokenType::In) {
+        if self.accept(Token::Not) && self.accept(Token::In) {
             return Node::comparison_node("notin", &left, &self.e5());
         }
 
@@ -206,10 +203,10 @@ impl Parser {
     }
 
     fn e5addsub(&mut self) -> Node {
-        let op_map = HashMap::from([(TokenType::Plus, "add"), (TokenType::Dash, "sub")]);
+        let op_map = HashMap::from([(Token::Plus, "add"), (Token::Dash, "sub")]);
         let mut left = self.e5muldiv();
         loop {
-            let op = self.accept_any(vec![TokenType::Plus, TokenType::Dash]);
+            let op = self.accept_any(vec![Token::Plus, Token::Dash]);
             if let Some(op) = op {
                 left = Node::arithmetic_node(op_map[&op], &left, &self.e5muldiv());
             } else {
@@ -222,14 +219,14 @@ impl Parser {
 
     fn e5muldiv(&mut self) -> Node {
         let op_map = HashMap::from([
-            (TokenType::Percent, "mod"),
-            (TokenType::Star, "mul"),
-            (TokenType::FSlash, "div"),
+            (Token::Percent, "mod"),
+            (Token::Star, "mul"),
+            (Token::FSlash, "div"),
         ]);
 
         let mut left = self.e6();
         loop {
-            let op = self.accept_any(vec![TokenType::Percent, TokenType::Star, TokenType::FSlash]);
+            let op = self.accept_any(vec![Token::Percent, Token::Star, Token::FSlash]);
             if let Some(op) = op {
                 left = Node::arithmetic_node(op_map[&op], &left, &self.e6());
             } else {
@@ -241,11 +238,11 @@ impl Parser {
     }
 
     fn e6(&mut self) -> Node {
-        if self.accept(TokenType::Not) {
-            return Node::not_node(self.current_tok.clone(), &self.e7());
+        if self.accept(Token::Not) {
+            return Node::not_node(self.current_tok.0.clone(), &self.e7());
         }
-        if self.accept(TokenType::Dash) {
-            return Node::uminus_node(self.current_tok.clone(), &self.e7());
+        if self.accept(Token::Dash) {
+            return Node::uminus_node(self.current_tok.0.clone(), &self.e7());
         }
 
         self.e7()
@@ -254,9 +251,9 @@ impl Parser {
     fn e7(&mut self) -> Node {
         let mut left = self.e8();
         let block_start = self.current_tok.clone();
-        if self.accept(TokenType::LParen) {
+        if self.accept(Token::LParen) {
             let args = self.args();
-            self.block_expect(TokenType::RParen, &block_start);
+            self.block_expect(Token::RParen, &block_start.0);
 
             if !matches!(left.node_type, NodeType::IDNode { .. }) {
                 panic!("Function call must be applied to plain ID");
@@ -264,11 +261,11 @@ impl Parser {
 
             if let NodeType::IDNode { value: var_name } = &left.node_type {
                 left = Node::function_node(
-                    left.filename.to_string(),
-                    left.lineno,
-                    left.colno,
-                    Some(self.current_tok.lineno),
-                    Some(self.current_tok.colno),
+                    "".to_string(),
+                    0,
+                    0,
+                    Some(0),
+                    Some(0),
                     var_name.to_string(),
                     &args,
                 );
@@ -278,11 +275,11 @@ impl Parser {
         let mut go_again = true;
         while go_again {
             go_again = false;
-            if self.accept(TokenType::Dot) {
+            if self.accept(Token::Dot) {
                 go_again = true;
                 left = self.method_call(&left);
             }
-            if self.accept(TokenType::LCurly) {
+            if self.accept(Token::LCurly) {
                 go_again = true;
                 left = self.index_call(&left);
             }
@@ -293,31 +290,25 @@ impl Parser {
 
     fn e8(&mut self) -> Node {
         let block_start = self.current_tok.clone();
-        if self.accept(TokenType::LParen) {
+        if self.accept(Token::LParen) {
             let e = self.statement();
-            self.block_expect(TokenType::RParen, &block_start);
+            self.block_expect(Token::RParen, &block_start.0);
             e
-        } else if self.accept(TokenType::LBrace) {
+        } else if self.accept(Token::LBrace) {
             let args = self.args();
-            self.block_expect(TokenType::RBrace, &block_start);
+            self.block_expect(Token::RBrace, &block_start.0);
             Node::array_node(
                 &args,
-                block_start.lineno,
-                block_start.colno,
-                Some(self.current_tok.lineno),
-                Some(self.current_tok.colno),
+                block_start.1.start as i32,
+                block_start.1.end as i32,
+                Some(self.current_tok.1.start as i32),
+                Some(self.current_tok.1.end as i32),
             )
-        } else if self.accept(TokenType::LBrace) {
+        } else if self.accept(Token::LBrace) {
             let key_values = self.key_values();
-            self.block_expect(TokenType::RBrace, &block_start);
+            self.block_expect(Token::RBrace, &block_start.0);
 
-            Node::dict_node(
-                &key_values,
-                block_start.lineno,
-                block_start.colno,
-                Some(self.current_tok.lineno),
-                Some(self.current_tok.colno),
-            )
+            Node::dict_node(&key_values, 0, 0, Some(0), Some(0))
         } else {
             self.e9()
         }
@@ -325,79 +316,60 @@ impl Parser {
 
     fn e9(&mut self) -> Node {
         let mut t = self.current_tok.clone();
-        if self.accept(TokenType::True) {
-            t.value = TokenValue::Bool(true);
-            return Node::boolean_node(t);
+        if self.accept(Token::True) {
+            return Node::boolean_node(t.0);
         }
 
-        if self.accept(TokenType::False) {
-            t.value = TokenValue::Bool(false);
-            return Node::boolean_node(t);
+        if self.accept(Token::False) {
+            return Node::boolean_node(t.0);
         }
 
-        if self.accept(TokenType::ID) {
-            let mut value = String::new();
-            if let TokenValue::Str(s) = &t.value {
-                value = s.clone();
-            };
-
-            return Node::id_node(t, value);
+        if self.accept(Token::ID("".to_string())) {
+            return Node::id_node(t.0);
         }
 
-        if self.accept(TokenType::Number) {
-            let mut value = 0;
-            if let TokenValue::Int(n) = t.value {
-                value = n
-            };
-            return Node::number_node(t, value);
+        if self.accept(Token::Number(0)) {
+            return Node::number_node(t.0);
         }
 
-        if self.accept(TokenType::String) {
-            let mut value = String::new();
-            if let TokenValue::Str(s) = &t.value {
-                value = s.clone();
-            };
-            return Node::string_node(t, value);
+        if self.accept(Token::String("".to_string())) {
+            return Node::string_node(t.0);
         }
 
-        if self.accept(TokenType::FString) {
-            let mut value = String::new();
-            if let TokenValue::Str(s) = &t.value {
-                value = s.clone();
-            };
-
-            return Node::fstring_node(t, value);
-        }
-
-        if self.accept(TokenType::MultilineFstring) {
-            let mut value = String::new();
-            if let TokenValue::Str(s) = &t.value {
-                value = s.clone();
-            };
-            return Node::multiline_fstring_node(t, value);
-        }
-
-        Node::empty_node(
-            self.current_tok.lineno,
-            self.current_tok.colno,
-            self.current_tok.filename.clone(),
-        )
+        //        if self.accept(Token::FString) {
+        //            let mut value = String::new();
+        //            if let TokenValue::Str(s) = &t.value {
+        //                value = s.clone();
+        //            };
+        //
+        //            return Node::fstring_node(t, value);
+        //        }
+        //
+        //        if self.accept(Token::MultilineFstring) {
+        //            let mut value = String::new();
+        //            if let TokenValue::Str(s) = &t.value {
+        //                value = s.clone();
+        //            };
+        //            return Node::multiline_fstring_node(t, value);
+        //        }
+        //
+        Node::empty_node(0, 0, "".to_string())
     }
 
     fn key_values(&mut self) -> Node {
         let mut s = Rc::from(self.statement());
-        let mut a = Node::argument_node(self.current_tok.clone());
+        let mut a = Node::argument_node(self.current_tok.0.clone());
 
         while s.node_type != NodeType::EmptyNode {
-            if self.accept(TokenType::Colon) {
+            if self.accept(Token::Colon) {
                 if let NodeType::ArgumentNode(ref mut arg_node) = a.node_type {
                     arg_node.set_kwarg_no_check(s, Rc::from(self.statement()));
                     let potential = self.current_tok.clone();
-                    if !self.accept(TokenType::Comma) {
+                    if !self.accept(Token::Comma) {
                         return a;
                     }
 
-                    arg_node.commas.push(potential);
+                    arg_node.commas.push(potential.0);
                 }
             } else {
                 panic!("Only key:value pairs are valid in dict construction");
@@ -411,16 +383,16 @@ impl Parser {
 
     fn args(&mut self) -> Node {
         let mut s = Rc::from(self.statement());
-        let mut a = Node::argument_node(self.current_tok.clone());
+        let mut a = Node::argument_node(self.current_tok.0.clone());
 
         while s.node_type != NodeType::EmptyNode {
             let mut potential = self.current_tok.clone();
-            if self.accept(TokenType::Comma) {
+            if self.accept(Token::Comma) {
                 if let NodeType::ArgumentNode(arg_node) = &mut a.node_type {
-                    arg_node.commas.push(potential);
+                    arg_node.commas.push(potential.0);
                     arg_node.append(s);
                 }
-            } else if self.accept(TokenType::Colon) {
+            } else if self.accept(Token::Colon) {
                 if !matches!(s.node_type, NodeType::IDNode { .. }) {
                     panic!("Dictionary key must be a plain identifier");
                 }
@@ -429,11 +401,11 @@ impl Parser {
                     arg_node.set_kwarg(s, Rc::from(self.statement()));
                     potential = self.current_tok.clone();
 
-                    if !self.accept(TokenType::Comma) {
+                    if !self.accept(Token::Comma) {
                         return a;
                     }
 
-                    arg_node.commas.push(potential);
+                    arg_node.commas.push(potential.0);
                 }
             } else if let NodeType::ArgumentNode(arg_node) = &mut a.node_type {
                 arg_node.append(s);
@@ -452,24 +424,17 @@ impl Parser {
             panic!("Method name must be plain ID");
         }
 
-        self.expect(TokenType::LParen);
+        self.expect(Token::LParen);
         let args = self.args();
-        self.expect(TokenType::RParen);
+        self.expect(Token::RParen);
 
         let method = if let NodeType::IDNode { value: method_name } = methodname.node_type {
-            Node::method_node(
-                methodname.filename,
-                methodname.lineno,
-                methodname.colno,
-                source,
-                method_name,
-                &args,
-            )
+            Node::method_node("".to_string(), 0, 0, source, method_name, &args)
         } else {
             unreachable!();
         };
 
-        if self.accept(TokenType::Dot) {
+        if self.accept(Token::Dot) {
             return self.method_call(&method);
         }
 
@@ -478,7 +443,7 @@ impl Parser {
 
     fn index_call(&mut self, source_object: &Node) -> Node {
         let index_statement = self.statement();
-        self.expect(TokenType::RCurly);
+        self.expect(Token::RCurly);
         Node::index_node(
             &Rc::from(source_object.to_owned()),
             &Rc::from(index_statement),
@@ -488,7 +453,7 @@ impl Parser {
     fn ifblock(&mut self) -> Node {
         let condition = self.statement();
         let clause = Node::ifclause_node(&condition);
-        self.expect(TokenType::EOL);
+        self.expect(Token::EOL);
         let block = self.codeblock();
         if let NodeType::IfClauseNode {
             ref mut ifs,
@@ -511,9 +476,9 @@ impl Parser {
     }
 
     fn elseifblock(&mut self, clause: &Node) {
-        while self.accept(TokenType::ElIf) {
+        while self.accept(Token::ElIf) {
             let s = self.statement();
-            self.expect(TokenType::EOL);
+            self.expect(Token::EOL);
             let b = self.codeblock();
 
             if let NodeType::IfClauseNode {
@@ -527,28 +492,24 @@ impl Parser {
     }
 
     fn elseblock(&mut self) -> Node {
-        if self.accept(TokenType::Else) {
-            self.expect(TokenType::EOL);
+        if self.accept(Token::Else) {
+            self.expect(Token::EOL);
             return self.codeblock();
         }
 
-        Node::empty_node(
-            self.current_tok.lineno,
-            self.current_tok.colno,
-            self.current_tok.filename.clone(),
-        )
+        Node::empty_node(0, 0, "".to_string())
     }
 
     fn line(&mut self) -> Node {
         let block_start = self.current_tok.clone();
 
-        if self.current_tok.tid == TokenType::EOL {
-            return Node::new(self.current_tok.clone(), NodeType::EmptyNode);
+        if self.current_tok.0 == Token::EOL {
+            return Node::new(self.current_tok.0.clone(), NodeType::EmptyNode);
         }
 
-        if self.accept(TokenType::If) {
+        if self.accept(Token::If) {
             let ifblock = self.ifblock();
-            self.block_expect(TokenType::EndIf, &block_start);
+            self.block_expect(Token::EndIf, &block_start.0);
             return ifblock;
         }
 
@@ -565,10 +526,10 @@ impl Parser {
                 lines.push(Rc::from(curline));
             }
 
-            cond = self.accept(TokenType::EOL);
+            cond = self.accept(Token::EOL);
         }
 
-        Node::new(self.current_tok.clone(), NodeType::CodeBlock { lines })
+        Node::new(self.current_tok.0.clone(), NodeType::CodeBlock { lines })
     }
 }
 
@@ -586,7 +547,7 @@ mod tests {
             executable('exec', dependencies: deps)
         "#;
 
-        let mut p = Parser::new(code.to_string(), "parser_test".to_string());
+        let mut p = Parser::new(code, "parser_test");
         let c = p.parse();
 
         // First node from parse should be codeblock node

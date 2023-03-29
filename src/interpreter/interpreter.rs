@@ -96,7 +96,7 @@ impl InterpreterTrait for Interpreter {
                 .unwrap_or_default(),
         );
 
-        self.ast = Some(Parser::new(code, filename).parse());
+        self.ast = Some(Parser::new(&code, &filename).parse());
 
         Ok(())
     }
@@ -144,7 +144,7 @@ impl Interpreter {
         let end = end.unwrap_or(lines.len());
         let statements = &lines.as_slice()[start..end];
         for curr in statements {
-            self.current_lineno = curr.lineno;
+            //            self.current_lineno = curr.lineno;
             self.evaluate_statement(curr);
         }
     }
@@ -570,10 +570,9 @@ mod tests {
             project('simple', 'cpp', version: '0.1')
 
             executable('simple', 'main.cpp')
-        "
-        .to_string();
+        ";
 
-        let ast = Parser::new(code, "testfile".to_string()).parse();
+        let ast = Parser::new(code, "testfile").parse();
 
         let mut inter = Interpreter {
             ast: Some(ast),

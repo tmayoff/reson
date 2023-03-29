@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::token::{Token, TokenType, TokenValue};
+use super::token::Token;
 
 #[derive(Debug)]
 pub enum LexError {
@@ -10,6 +10,7 @@ pub enum LexError {
 }
 
 pub struct Lexer {
+    lex: logos::Lexer<Token>,
     filename: String,
     code: String,
     keywords: Vec<String>,
