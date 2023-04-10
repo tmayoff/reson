@@ -1,13 +1,13 @@
+use super::node::ArgumentNode;
+use super::node::IndexNode;
+use super::node::MethodNode;
+use super::node::Node;
+use super::token::Token;
+use lazy_static::lazy_static;
+use logos::{Logos, SpannedIter};
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 use std::rc::Rc;
-
-use crate::parser::node::Node;
-use crate::parser::token::Token;
-use lazy_static::lazy_static;
-
-use super::node::NodeType;
-use logos::{Logos, SpannedIter};
 
 #[derive(Debug)]
 enum ParserError {}
@@ -116,27 +116,27 @@ impl<'a> Parser<'a> {
         let left = self.e2();
         if self.accept(Token::PlusAssign) {
             let value = self.e1();
-            if !matches!(left.node_type, NodeType::IDNode { .. }) {
+            if !matches!(left, Node::IDNode { .. }) {
                 panic!("Plus Assignment target must be an ID");
             }
 
-            if let NodeType::IDNode { value: var_name } = &left.node_type {
-                return Node::plusassignment_node(
-                    "".to_string(),
-                    0,
-                    0,
-                    var_name.to_owned(),
-                    &value,
-                );
+            if let Node::IDNode { value: var_name } = &left {
+                return Node::PlusAssignmentNode {
+                    var_name: var_name.to_owned(),
+                    value: Rc::from(value),
+                };
             }
         } else if self.accept(Token::Assign) {
             let value = self.e1();
-            if !matches!(left.node_type, NodeType::IDNode { .. }) {
+            if !matches!(left, Node::IDNode { .. }) {
                 panic!("Assignment target must be an ID");
             }
 
-            if let NodeType::IDNode { value: var_name } = &left.node_type {
-                return Node::assignment_node("".to_owned(), 0, 0, var_name.to_string(), &value);
+            if let Node::IDNode { value: var_name } = &left {
+                return Node::AssignmentNode {
+                    var_name: var_name.to_owned(),
+                    value: Rc::from(value),
+                };
             }
         } else if self.accept(Token::QuestionMark) {
             if self.in_ternary {
@@ -148,7 +148,11 @@ impl<'a> Parser<'a> {
             self.expect(Token::Colon);
             let falseblock = self.e1();
             self.in_ternary = false;
-            return Node::ternary_node(&left, &trueblock, &falseblock);
+            return Node::TernaryNode {
+                condition: Rc::from(left),
+                trueblock: Rc::from(trueblock),
+                falseblock: Rc::from(falseblock),
+            };
         }
 
         left
@@ -158,11 +162,14 @@ impl<'a> Parser<'a> {
         let mut left = self.e3();
 
         while self.accept(Token::Or) {
-            if left.node_type == NodeType::EmptyNode {
+            if left == Node::Empty {
                 panic!("Invalid and clause.");
             }
 
-            left = Node::or_node(&left, &self.e3());
+            left = Node::OrNode {
+                left: Rc::from(left),
+                right: Rc::from(self.e3()),
+            }
         }
 
         left
@@ -172,11 +179,14 @@ impl<'a> Parser<'a> {
         let mut left = self.e4();
 
         while self.accept(Token::And) {
-            if left.node_type == NodeType::EmptyNode {
+            if left == Node::Empty {
                 panic!("Invalid and clause.");
             }
 
-            left = Node::and_node(&left, &self.e4());
+            left = Node::AndNode {
+                left: Rc::from(left),
+                right: Rc::from(self.e4()),
+            };
         }
 
         left
@@ -187,12 +197,20 @@ impl<'a> Parser<'a> {
 
         for (nodename, operator_type) in COMPARISON_MAP.clone() {
             if self.accept(nodename) {
-                return Node::comparison_node(operator_type, &left, &self.e5());
+                return Node::ComparisonNode {
+                    left: Rc::from(left),
+                    right: Rc::from(self.e5()),
+                    ctype: operator_type.to_string(),
+                };
             }
         }
 
         if self.accept(Token::Not) && self.accept(Token::In) {
-            return Node::comparison_node("notin", &left, &self.e5());
+            return Node::ComparisonNode {
+                left: Rc::from(left),
+                right: Rc::from(self.e5()),
+                ctype: "notin".to_string(),
+            };
         }
 
         left
@@ -208,7 +226,11 @@ impl<'a> Parser<'a> {
         loop {
             let op = self.accept_any(vec![Token::Plus, Token::Dash]);
             if let Some(op) = op {
-                left = Node::arithmetic_node(op_map[&op], &left, &self.e5muldiv());
+                left = Node::ArithmeticNode {
+                    left: Rc::from(left),
+                    right: Rc::from(self.e5muldiv()),
+                    operation: op_map[&op].to_string(),
+                };
             } else {
                 break;
             }
@@ -228,7 +250,11 @@ impl<'a> Parser<'a> {
         loop {
             let op = self.accept_any(vec![Token::Percent, Token::Star, Token::FSlash]);
             if let Some(op) = op {
-                left = Node::arithmetic_node(op_map[&op], &left, &self.e6());
+                left = Node::ArithmeticNode {
+                    left: Rc::from(left),
+                    right: Rc::from(self.e6()),
+                    operation: op_map[&op].to_owned(),
+                };
             } else {
                 break;
             }
@@ -239,15 +265,19 @@ impl<'a> Parser<'a> {
 
     fn e6(&mut self) -> Node {
         if self.accept(Token::Not) {
-            return Node::not_node(self.current_tok.0.clone(), &self.e7());
+            return Node::NotNode {
+                value: Rc::from(self.e7()),
+            };
         }
         if self.accept(Token::Dash) {
-            return Node::uminus_node(self.current_tok.0.clone(), &self.e7());
+            return Node::UMinusNode {
+                value: Rc::from(self.e7()),
+            };
         }
 
         self.e7()
     }
-
+    // Func Call
     fn e7(&mut self) -> Node {
         let mut left = self.e8();
         let block_start = self.current_tok.clone();
@@ -255,20 +285,15 @@ impl<'a> Parser<'a> {
             let args = self.args();
             self.block_expect(Token::RParen, &block_start.0);
 
-            if !matches!(left.node_type, NodeType::IDNode { .. }) {
+            if !matches!(left, Node::IDNode { .. }) {
                 panic!("Function call must be applied to plain ID");
             }
 
-            if let NodeType::IDNode { value: var_name } = &left.node_type {
-                left = Node::function_node(
-                    "".to_string(),
-                    0,
-                    0,
-                    Some(0),
-                    Some(0),
-                    var_name.to_string(),
-                    &args,
-                );
+            if let Node::IDNode { value: var_name } = &left {
+                left = Node::FunctionNode {
+                    func_name: var_name.to_string(),
+                    args: Rc::from(args),
+                };
             }
         }
 
@@ -297,18 +322,16 @@ impl<'a> Parser<'a> {
         } else if self.accept(Token::LBrace) {
             let args = self.args();
             self.block_expect(Token::RBrace, &block_start.0);
-            Node::array_node(
-                &args,
-                block_start.1.start as i32,
-                block_start.1.end as i32,
-                Some(self.current_tok.1.start as i32),
-                Some(self.current_tok.1.end as i32),
-            )
+            Node::ArrayNode {
+                args: Rc::from(args),
+            }
         } else if self.accept(Token::LBrace) {
             let key_values = self.key_values();
             self.block_expect(Token::RBrace, &block_start.0);
 
-            Node::dict_node(&key_values, 0, 0, Some(0), Some(0))
+            Node::DictNode {
+                args: Rc::from(key_values),
+            }
         } else {
             self.e9()
         }
@@ -317,23 +340,29 @@ impl<'a> Parser<'a> {
     fn e9(&mut self) -> Node {
         let mut t = self.current_tok.clone();
         if self.accept(Token::True) {
-            return Node::boolean_node(t.0);
+            return Node::BoolNode { value: true };
         }
 
         if self.accept(Token::False) {
-            return Node::boolean_node(t.0);
+            return Node::BoolNode { value: false };
         }
 
         if self.accept(Token::ID("".to_string())) {
-            return Node::id_node(t.0);
+            if let Token::ID(id) = t.0 {
+                return Node::IDNode { value: id };
+            }
         }
 
         if self.accept(Token::Number(0)) {
-            return Node::number_node(t.0);
+            if let Token::Number(num) = t.0 {
+                return Node::NumberNode { value: num };
+            }
         }
 
         if self.accept(Token::String("".to_string())) {
-            return Node::string_node(t.0);
+            if let Token::String(str) = t.0 {
+                return Node::StringNode { value: str };
+            }
         }
 
         //        if self.accept(Token::FString) {
@@ -353,16 +382,16 @@ impl<'a> Parser<'a> {
         //            return Node::multiline_fstring_node(t, value);
         //        }
         //
-        Node::empty_node(0, 0, "".to_string())
+        Node::Empty
     }
 
     fn key_values(&mut self) -> Node {
         let mut s = Rc::from(self.statement());
-        let mut a = Node::argument_node(self.current_tok.0.clone());
+        let mut a = Node::ArgumentNode(ArgumentNode::default());
 
-        while s.node_type != NodeType::EmptyNode {
+        while *s != Node::Empty {
             if self.accept(Token::Colon) {
-                if let NodeType::ArgumentNode(ref mut arg_node) = a.node_type {
+                if let Node::ArgumentNode(ref mut arg_node) = a {
                     arg_node.set_kwarg_no_check(s, Rc::from(self.statement()));
                     let potential = self.current_tok.clone();
                     if !self.accept(Token::Comma) {
@@ -383,31 +412,31 @@ impl<'a> Parser<'a> {
 
     fn args(&mut self) -> Node {
         let mut s = Rc::from(self.statement());
-        let mut a = Node::argument_node(self.current_tok.0.clone());
+        let mut a = Node::ArgumentNode(ArgumentNode::default());
 
-        while s.node_type != NodeType::EmptyNode {
+        while *s != Node::Empty {
             let mut potential = self.current_tok.clone();
             if self.accept(Token::Comma) {
-                if let NodeType::ArgumentNode(arg_node) = &mut a.node_type {
+                if let Node::ArgumentNode(arg_node) = &mut a {
                     arg_node.commas.push(potential.0);
                     arg_node.append(s);
                 }
             } else if self.accept(Token::Colon) {
-                if !matches!(s.node_type, NodeType::IDNode { .. }) {
+                if !matches!(*s, Node::IDNode { .. }) {
                     panic!("Dictionary key must be a plain identifier");
                 }
 
-                if let NodeType::ArgumentNode(arg_node) = &mut a.node_type {
+                if let Node::ArgumentNode(arg_node) = &mut a {
                     arg_node.set_kwarg(s, Rc::from(self.statement()));
                     potential = self.current_tok.clone();
 
-                    if !self.accept(Token::Comma) {
-                        return a;
-                    }
+                    //                    if !self.accept(Token::Comma) {
+                    //                        return a;
+                    //                    }
 
                     arg_node.commas.push(potential.0);
                 }
-            } else if let NodeType::ArgumentNode(arg_node) = &mut a.node_type {
+            } else if let Node::ArgumentNode(arg_node) = &mut a {
                 arg_node.append(s);
                 return a;
             }
@@ -420,7 +449,7 @@ impl<'a> Parser<'a> {
 
     fn method_call(&mut self, source: &Node) -> Node {
         let methodname = self.e9();
-        if !matches!(methodname.node_type, NodeType::IDNode { .. }) {
+        if !matches!(methodname, Node::IDNode { .. }) {
             panic!("Method name must be plain ID");
         }
 
@@ -428,8 +457,12 @@ impl<'a> Parser<'a> {
         let args = self.args();
         self.expect(Token::RParen);
 
-        let method = if let NodeType::IDNode { value: method_name } = methodname.node_type {
-            Node::method_node("".to_string(), 0, 0, source, method_name, &args)
+        let method = if let Node::IDNode { value: method_name } = methodname {
+            Node::MethodNode(MethodNode {
+                source_object: Rc::from(source.to_owned()),
+                name: method_name,
+                args: Rc::from(args),
+            })
         } else {
             unreachable!();
         };
@@ -444,30 +477,36 @@ impl<'a> Parser<'a> {
     fn index_call(&mut self, source_object: &Node) -> Node {
         let index_statement = self.statement();
         self.expect(Token::RCurly);
-        Node::index_node(
-            &Rc::from(source_object.to_owned()),
-            &Rc::from(index_statement),
-        )
+        Node::IndexNode(IndexNode {
+            iobject: Rc::from(source_object.to_owned()),
+            index: Rc::from(index_statement),
+        })
     }
 
     fn ifblock(&mut self) -> Node {
         let condition = self.statement();
-        let clause = Node::ifclause_node(&condition);
+        let clause = Node::IfClauseNode {
+            ifs: Vec::new(),
+            elseblock: None,
+        };
         self.expect(Token::EOL);
         let block = self.codeblock();
-        if let NodeType::IfClauseNode {
+        if let Node::IfClauseNode {
             ref mut ifs,
             elseblock: _,
-        } = clause.node_type.clone()
+        } = clause.clone()
         {
-            ifs.push(Rc::from(Node::if_node(&clause, &condition, &block)));
+            ifs.push(Rc::from(Node::IfNode {
+                condition: Rc::from(condition),
+                block: Rc::from(block),
+            }));
         }
 
         self.elseifblock(&clause);
-        if let NodeType::IfClauseNode {
+        if let Node::IfClauseNode {
             ifs: _,
             mut elseblock,
-        } = clause.node_type.clone()
+        } = clause.clone()
         {
             elseblock = Some(Rc::from(self.elseblock()));
         }
@@ -481,12 +520,15 @@ impl<'a> Parser<'a> {
             self.expect(Token::EOL);
             let b = self.codeblock();
 
-            if let NodeType::IfClauseNode {
+            if let Node::IfClauseNode {
                 mut ifs,
                 elseblock: _,
-            } = clause.node_type.clone()
+            } = clause.clone()
             {
-                ifs.push(Rc::from(Node::if_node(&s, &s, &b)));
+                ifs.push(Rc::from(Node::IfNode {
+                    condition: Rc::from(s),
+                    block: Rc::from(b),
+                }));
             }
         }
     }
@@ -497,14 +539,14 @@ impl<'a> Parser<'a> {
             return self.codeblock();
         }
 
-        Node::empty_node(0, 0, "".to_string())
+        Node::Empty
     }
 
     fn line(&mut self) -> Node {
         let block_start = self.current_tok.clone();
 
         if self.current_tok.0 == Token::EOL {
-            return Node::new(self.current_tok.0.clone(), NodeType::EmptyNode);
+            return Node::Empty;
         }
 
         if self.accept(Token::If) {
@@ -522,14 +564,14 @@ impl<'a> Parser<'a> {
 
         while cond {
             let curline = self.line();
-            if curline.node_type != NodeType::EmptyNode {
+            if curline != Node::Empty {
                 lines.push(Rc::from(curline));
             }
 
             cond = self.accept(Token::EOL);
         }
 
-        Node::new(self.current_tok.0.clone(), NodeType::CodeBlock { lines })
+        Node::CodeBlock { lines: lines }
     }
 }
 
@@ -538,68 +580,76 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parser_test() {
+    fn simple_test() {
+        let expected = Node::CodeBlock {
+            lines: vec![Rc::from(Node::FunctionNode {
+                func_name: "project".to_string(),
+                args: Rc::from(Node::ArgumentNode(ArgumentNode {
+                    arguments: vec![Rc::from(Node::StringNode {
+                        value: "simple".to_string(),
+                    })],
+                    commas: Vec::new(),
+                    kwargs: Default::default(),
+                    ..Default::default()
+                })),
+            })],
+        };
+
         let code = r#"
-            project('test_proj', ['cpp'])
-            
-            a = dependency('dep')
-            deps = [a, b, c]
-            executable('exec', dependencies: deps)
+            project('simple')
         "#;
 
-        let mut p = Parser::new(code, "parser_test");
-        let c = p.parse();
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
 
-        // First node from parse should be codeblock node
-        assert!(matches!(c.node_type, NodeType::CodeBlock { .. }));
-        if let NodeType::CodeBlock { lines } = c.node_type {
-            assert_eq!(lines.len(), 4);
+        assert_eq!(ast, expected);
+    }
 
-            let mut it = lines.into_iter();
-            let l = it.next().expect("Failed to get first line");
+    #[test]
+    fn kwargs_test() {
+        let expected = Node::CodeBlock {
+            lines: vec![Rc::from(Node::FunctionNode {
+                func_name: "project".to_string(),
+                args: Rc::from(Node::ArgumentNode(ArgumentNode {
+                    arguments: vec![
+                        Rc::from(Node::StringNode {
+                            value: "kwargs_test".to_string(),
+                        }),
+                        Rc::from(Node::StringNode {
+                            value: "cpp".to_string(),
+                        }),
+                    ],
+                    commas: vec![Token::Comma, Token::Comma, Token::RParen],
+                    kwargs: BTreeMap::from([
+                        (
+                            Rc::from(Node::IDNode {
+                                value: "version".to_string(),
+                            }),
+                            Rc::from(Node::StringNode {
+                                value: "0.1.1".to_string(),
+                            }),
+                        ),
+                        (
+                            Rc::from(Node::IDNode {
+                                value: "meson_version".to_string(),
+                            }),
+                            Rc::from(Node::StringNode {
+                                value: "1.0.0".to_string(),
+                            }),
+                        ),
+                    ]),
+                    ..Default::default()
+                })),
+            })],
+        };
 
-            // First line should be project() function call
-            assert!(matches!(l.node_type, NodeType::FunctionNode { .. }));
-            if let NodeType::FunctionNode { func_name, args } = &l.node_type {
-                assert_eq!(func_name, "project");
+        let code = r#"
+            project('kwargs_test', 'cpp', version: '0.1.1', meson_version: '1.0.0')
+        "#;
 
-                // Arguments should be project name and language
-                assert!(matches!(args.node_type, NodeType::ArgumentNode { .. }));
-                if let NodeType::ArgumentNode(args_node) = &args.node_type {
-                    assert_eq!(args_node.commas.len(), 1);
-                    assert_eq!(args_node.arguments.len(), 2);
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
 
-                    let it = &mut args_node.clone().arguments.into_iter();
-
-                    let arg = it.next().expect("Expected a node");
-                    assert!(matches!(arg.node_type, NodeType::StringNode { .. }));
-                    if let NodeType::StringNode { value } = &arg.node_type {
-                        assert_eq!(value, "test_proj");
-                    }
-
-                    let arg = it.next().expect("Expected another node");
-                    assert!(matches!(arg.node_type, NodeType::ArrayNode { .. }));
-                    if let NodeType::ArrayNode { args } = &arg.node_type {
-                        let args = if let NodeType::ArgumentNode(args) = &args.node_type {
-                            args
-                        } else {
-                            unreachable!()
-                        };
-
-                        assert_eq!(args.commas.len(), 0);
-
-                        assert_eq!(args.arguments.len(), 1);
-                        let arg = &args.arguments[0];
-                        assert!(matches!(arg.node_type, NodeType::StringNode { .. }));
-                        if let NodeType::StringNode { value } = &arg.node_type {
-                            assert_eq!(value, "cpp");
-                        }
-                    }
-                }
-            }
-
-            let l = it.next().expect("Expected another line");
-            assert!(matches!(l.node_type, NodeType::AssignmentNode { .. }));
-        }
+        assert_eq!(ast, expected);
     }
 }

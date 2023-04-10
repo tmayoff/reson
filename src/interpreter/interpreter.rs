@@ -11,13 +11,9 @@ use std::{collections::HashMap, fs};
 use super::file::File;
 use super::BuiltinTypes;
 
-use crate::{
-    build::Build, environment::Environment, parser::node::Node, parser::node::NodeType,
-    BUILD_FILE_NAME,
-};
+use crate::{build::Build, environment::Environment, parser::node::Node, BUILD_FILE_NAME};
 
 use super::objects::{self, unholder, ElementaryTypes, ObjectTypes};
-use super::InterpreterTrait;
 
 #[derive(Default, Clone)]
 pub struct Interpreter {
@@ -39,8 +35,8 @@ pub struct Interpreter {
     ast: Option<Node>,
 }
 
-impl InterpreterTrait for Interpreter {
-    fn new(
+impl Interpreter {
+    pub fn new(
         build: Build,
         _backend: Option<String>,
         subdir: Option<&str>,
@@ -75,7 +71,7 @@ impl InterpreterTrait for Interpreter {
         &self.builtin
     }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         if let Some(ast) = self.ast.clone() {
             self.evaluate_codeblock(&ast, Some(1), None);
         }
@@ -125,7 +121,7 @@ impl Interpreter {
         assert!(self.ast.is_some());
         if let Some(ast) = &self.ast {
             assert!(
-                matches!(ast.node_type, NodeType::CodeBlock { .. }),
+                matches!(ast, Node::CodeBlock { .. }),
                 "AST is invalid, Possibly a bug in the parser"
             );
 
@@ -135,8 +131,8 @@ impl Interpreter {
     }
 
     fn evaluate_codeblock(&mut self, node: &Node, start: Option<usize>, end: Option<usize>) {
-        let lines = match &node.node_type {
-            NodeType::CodeBlock { lines } => lines,
+        let lines = match &node {
+            Node::CodeBlock { lines } => lines,
             _ => return,
         };
 
@@ -150,45 +146,45 @@ impl Interpreter {
     }
 
     fn evaluate_statement(&mut self, node: &Node) -> Option<ObjectTypes> {
-        match &node.node_type {
-            NodeType::FunctionNode { func_name, args } => self.function_call(node, func_name, args),
-            NodeType::BoolNode { value } => todo!(),
-            NodeType::IDNode { value } => todo!(),
-            NodeType::NumberNode { value } => todo!(),
-            NodeType::StringNode { value } => Some(self.holderify(ObjectTypes::Elementary(
+        match &node {
+            Node::FunctionNode { func_name, args } => self.function_call(node, func_name, args),
+            Node::BoolNode { value } => todo!(),
+            Node::IDNode { value } => todo!(),
+            Node::NumberNode { value } => todo!(),
+            Node::StringNode { value } => Some(self.holderify(ObjectTypes::Elementary(
                 ElementaryTypes::Str(value.to_owned()),
             ))),
-            NodeType::FStringNode { value } => todo!(),
-            NodeType::MultilineFStringNode { value } => todo!(),
-            NodeType::ContinueNode => todo!(),
-            NodeType::BreakNode => todo!(),
-            NodeType::ArgumentNode(_) => todo!(),
-            NodeType::ArrayNode { args } => self.evaluate_arraystatement(args),
-            NodeType::DictNode { args } => todo!(),
-            NodeType::EmptyNode => todo!(),
-            NodeType::OrNode { left, right } => todo!(),
-            NodeType::AndNode { left, right } => todo!(),
-            NodeType::ComparisonNode { left, right, ctype } => todo!(),
-            NodeType::ArithmeticNode {
+            Node::FStringNode { value } => todo!(),
+            Node::MultilineFStringNode { value } => todo!(),
+            Node::ContinueNode => todo!(),
+            Node::BreakNode => todo!(),
+            Node::ArgumentNode(_) => todo!(),
+            Node::ArrayNode { args } => self.evaluate_arraystatement(args),
+            Node::DictNode { args } => todo!(),
+            Node::Empty => todo!(),
+            Node::OrNode { left, right } => todo!(),
+            Node::AndNode { left, right } => todo!(),
+            Node::ComparisonNode { left, right, ctype } => todo!(),
+            Node::ArithmeticNode {
                 left,
                 right,
                 operation,
             } => todo!(),
-            NodeType::NotNode { value } => todo!(),
-            NodeType::CodeBlock { lines } => todo!(),
-            NodeType::IndexNode(_) => todo!(),
-            NodeType::MethodNode(_) => todo!(),
-            NodeType::AssignmentNode { var_name, value } => todo!(),
-            NodeType::PlusAssignmentNode { var_name, value } => todo!(),
-            NodeType::ForeachClauseNode {
+            Node::NotNode { value } => todo!(),
+            Node::CodeBlock { lines } => todo!(),
+            Node::IndexNode(_) => todo!(),
+            Node::MethodNode(_) => todo!(),
+            Node::AssignmentNode { var_name, value } => todo!(),
+            Node::PlusAssignmentNode { var_name, value } => todo!(),
+            Node::ForeachClauseNode {
                 varname,
                 items,
                 block,
             } => todo!(),
-            NodeType::IfNode { condition, block } => todo!(),
-            NodeType::IfClauseNode { ifs, elseblock } => todo!(),
-            NodeType::UMinusNode { value } => todo!(),
-            NodeType::TernaryNode {
+            Node::IfNode { condition, block } => todo!(),
+            Node::IfClauseNode { ifs, elseblock } => todo!(),
+            Node::UMinusNode { value } => todo!(),
+            Node::TernaryNode {
                 condition,
                 trueblock,
                 falseblock,
@@ -260,8 +256,8 @@ impl Interpreter {
         &mut self,
         args: &Node,
     ) -> (Vec<ObjectTypes>, HashMap<String, ObjectTypes>) {
-        assert!(matches!(args.node_type, NodeType::ArgumentNode(_)));
-        if let NodeType::ArgumentNode(arg_node) = &args.node_type {
+        assert!(matches!(args, Node::ArgumentNode(_)));
+        if let Node::ArgumentNode(arg_node) = &args {
             if arg_node.incorrect_order() {
                 panic!("All keywords must be after positional arguments");
             }
@@ -309,12 +305,9 @@ impl Interpreter {
     }
 
     fn key_resolver(key: &Node) -> String {
-        assert!(
-            matches!(key.node_type, NodeType::IDNode { .. }),
-            "Invalid kwargs format"
-        );
+        assert!(matches!(key, Node::IDNode { .. }), "Invalid kwargs format");
 
-        if let NodeType::IDNode { value } = &key.node_type {
+        if let Node::IDNode { value } = key {
             return value.clone();
         }
 
