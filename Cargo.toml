@@ -14,7 +14,7 @@ file_diff = "1.0.0"
 lazy_static = "1.4.0"
 log = "0.4.17"
 logos = { version = "0.12.1", features = ["logos-derive", "export_derive", "std"] }
-logos-derive = "0.12.1"
+logos-derive = "0.13.0"
 pathdiff = "0.2.1"
 regex = "1.6.0"
 snafu = "0.7.2"
