@@ -2,15 +2,13 @@ use super::file::File;
 
 #[derive(Clone)]
 pub enum ObjectTypes {
-    Builtin(BuiltinTypes),
-    Returned(ReturnedObjectTypes),
     Elementary(ElementaryTypes),
 }
 
 #[derive(Clone)]
 pub enum BuiltinTypes {}
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ElementaryTypes {
     Void,
     Bool(bool),
@@ -27,8 +25,6 @@ pub enum ReturnedObjectTypes {
 
 pub fn unholder(object: &ObjectTypes) -> ElementaryTypes {
     match object {
-        ObjectTypes::Builtin(_) => todo!(),
-        ObjectTypes::Returned(_) => todo!(),
         ObjectTypes::Elementary(e) => e.to_owned(),
     }
 }

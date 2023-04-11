@@ -1,19 +1,14 @@
-use crate::backend::ninja::NinjaBackend;
-use crate::build::{BuildTarget, Target, TargetType};
+use super::file::File;
+use super::objects::{self, unholder, ElementaryTypes, ObjectTypes};
+use crate::build::{BuildTarget, Target};
 use crate::compiler::Compiler;
 use crate::parser::parser::Parser;
 use crate::utils::MachineChoice;
-
+use crate::{backend::ninja::NinjaBackend, build::TargetType};
+use crate::{build::Build, environment::Environment, parser::node::Node, BUILD_FILE_NAME};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::{collections::HashMap, fs};
-
-use super::file::File;
-use super::BuiltinTypes;
-
-use crate::{build::Build, environment::Environment, parser::node::Node, BUILD_FILE_NAME};
-
-use super::objects::{self, unholder, ElementaryTypes, ObjectTypes};
 
 #[derive(Default, Clone)]
 pub struct Interpreter {
@@ -23,13 +18,11 @@ pub struct Interpreter {
     // summary: HashMap<String, String>,
     // options_file: PathBuf,
     // compilers: HashMap<String, Compiler>,
-    builtin: HashMap<String, BuiltinTypes>,
     subdir: String,
     // active_projectname: String,
     // subproject: String,
     // subproject_dir: String,
     // subproject_directory_name: String,
-    current_lineno: i32,
     argument_depth: i32,
 
     ast: Option<Node>,
@@ -67,10 +60,6 @@ impl Interpreter {
         Ok(s)
     }
 
-    fn get_builtin(&self) -> &HashMap<String, BuiltinTypes> {
-        &self.builtin
-    }
-
     pub fn run(&mut self) {
         if let Some(ast) = self.ast.clone() {
             self.evaluate_codeblock(&ast, Some(1), None);
@@ -102,14 +91,6 @@ impl Interpreter {
             self.evaluate_codeblock(ast, None, Some(1));
         }
     }
-
-    fn get_sourceroot(&self) -> String {
-        todo!()
-    }
-
-    fn get_funcs(&self) -> Vec<String> {
-        todo!()
-    }
 }
 
 impl Interpreter {
@@ -136,7 +117,7 @@ impl Interpreter {
             _ => return,
         };
 
-        let start = start.unwrap_or(0) as usize;
+        let start = start.unwrap_or(0);
         let end = end.unwrap_or(lines.len());
         let statements = &lines.as_slice()[start..end];
         for curr in statements {
@@ -214,9 +195,6 @@ impl Interpreter {
 
     fn holderify(&self, value: ObjectTypes) -> ObjectTypes {
         match value {
-            ObjectTypes::Returned(r) => match r {
-                objects::ReturnedObjectTypes::File(_) => todo!(),
-            },
             ObjectTypes::Elementary(v) => match v {
                 ElementaryTypes::Void => todo!(),
                 ElementaryTypes::Bool(_) => todo!(),
@@ -225,15 +203,6 @@ impl Interpreter {
                 ElementaryTypes::List(_) => todo!(),
                 ElementaryTypes::Str(s) => ObjectTypes::Elementary(ElementaryTypes::Str(s)),
             },
-            ObjectTypes::Builtin(_) => todo!(),
-            // HoldableTypes::Bool(_) => todo!(),
-            // HoldableTypes::Str(str) => InterpreterObject::object_holder(HoldableTypes::Str(str)),
-            // HoldableTypes::Int(_) => todo!(),
-            // HoldableTypes::Dict => todo!(),
-            // HoldableTypes::VecBool(_) => todo!(),
-            // HoldableTypes::VecInt(_) => todo!(),
-            // HoldableTypes::VecStr(_) => todo!(),
-            // HoldableTypes::File => todo!(),
         }
     }
 
@@ -340,6 +309,7 @@ impl Interpreter {
         args: Vec<ElementaryTypes>,
         kwargs: HashMap<String, ElementaryTypes>,
     ) {
+        // TODO Fill this out
         // Kwargs used in project function
         struct ProjectKwargs {
             version: Option<String>,
@@ -347,6 +317,7 @@ impl Interpreter {
             license: Vec<String>,
             subproject_dir: String,
         }
+
         let mut project_args = ProjectKwargs {
             version: None,
             meson_version: None,
@@ -404,7 +375,7 @@ impl Interpreter {
         }
 
         self.add_languages(&project_langs, true, MachineChoice::Host);
-        self.add_languages(&project_langs, false, MachineChoice::Build);
+        // self.add_languages(&project_langs, false, MachineChoice::Build);
     }
 
     fn func_executable(
@@ -555,23 +526,87 @@ impl Interpreter {
 #[cfg(test)]
 mod tests {
 
+    use std::path::Path;
+
     use super::*;
+
+    fn run_interpreter(inter: &mut Interpreter) {
+        inter.sanity_check_ast();
+        inter.parse_project();
+        inter.redetect_machines();
+        inter.run();
+    }
 
     #[test]
     fn simple_test() {
         let code = r"
             project('simple', 'cpp', version: '0.1')
-
-            executable('simple', 'main.cpp')
         ";
 
         let ast = Parser::new(code, "testfile").parse();
 
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
         let mut inter = Interpreter {
             ast: Some(ast),
+            environment: env,
+            build,
             ..Default::default()
         };
 
-        inter.run();
+        run_interpreter(&mut inter);
+
+        assert_eq!(&inter.build.project_name, "simple");
+        assert!(inter.environment.coredata.compilers.contains_key("cpp"));
+    }
+
+    #[test]
+    fn multiple_langs_test() {
+        let code = r"
+            project('simple', ['cpp'], version: '0.1')
+        ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(&inter.build.project_name, "simple");
+        assert!(inter.environment.coredata.compilers.contains_key("cpp"));
+    }
+
+    #[test]
+    fn executable_test() {
+        let code = r"
+            project('simple', ['cpp'], version: '0.1')
+
+            executable('simple_exe', 'main.cpp')
+        ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(&inter.build.project_name, "simple");
+        assert!(inter.environment.coredata.compilers.contains_key("cpp"));
+
+        assert!(!inter.build.targets.is_empty());
     }
 }
