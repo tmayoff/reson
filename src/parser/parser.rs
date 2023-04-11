@@ -112,6 +112,7 @@ impl<'a> Parser<'a> {
         self.e1()
     }
 
+    /// Assignment
     fn e1(&mut self) -> Node {
         let left = self.e2();
         if self.accept(Token::PlusAssign) {
@@ -158,6 +159,7 @@ impl<'a> Parser<'a> {
         left
     }
 
+    /// Or
     fn e2(&mut self) -> Node {
         let mut left = self.e3();
 
@@ -175,6 +177,7 @@ impl<'a> Parser<'a> {
         left
     }
 
+    /// And
     fn e3(&mut self) -> Node {
         let mut left = self.e4();
 
@@ -192,6 +195,7 @@ impl<'a> Parser<'a> {
         left
     }
 
+    /// Comparison
     fn e4(&mut self) -> Node {
         let left = self.e5();
 
@@ -216,6 +220,7 @@ impl<'a> Parser<'a> {
         left
     }
 
+    /// Arithmetic
     fn e5(&mut self) -> Node {
         self.e5addsub()
     }
@@ -263,6 +268,7 @@ impl<'a> Parser<'a> {
         left
     }
 
+    /// Negation
     fn e6(&mut self) -> Node {
         if self.accept(Token::Not) {
             return Node::NotNode {
@@ -277,7 +283,8 @@ impl<'a> Parser<'a> {
 
         self.e7()
     }
-    // Func Call
+
+    /// Func Call
     fn e7(&mut self) -> Node {
         let mut left = self.e8();
         let block_start = self.current_tok.clone();
@@ -313,6 +320,7 @@ impl<'a> Parser<'a> {
         left
     }
 
+    /// Parenthesis
     fn e8(&mut self) -> Node {
         let block_start = self.current_tok.clone();
         if self.accept(Token::LParen) {
@@ -337,8 +345,9 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Plain Token
     fn e9(&mut self) -> Node {
-        let mut t = self.current_tok.clone();
+        let t = self.current_tok.clone();
         if self.accept(Token::True) {
             return Node::BoolNode { value: true };
         }
@@ -411,40 +420,35 @@ impl<'a> Parser<'a> {
     }
 
     fn args(&mut self) -> Node {
-        let mut s = Rc::from(self.statement());
-        let mut a = Node::ArgumentNode(ArgumentNode::default());
+        let mut args = ArgumentNode::default();
 
-        while *s != Node::Empty {
-            let mut potential = self.current_tok.clone();
+        let mut stmt = self.statement();
+
+        while stmt != Node::Empty {
+            let potential = self.current_tok.clone();
             if self.accept(Token::Comma) {
-                if let Node::ArgumentNode(arg_node) = &mut a {
-                    arg_node.commas.push(potential.0);
-                    arg_node.append(s);
-                }
+                args.commas.push(potential.0);
+                args.append(Rc::from(stmt));
             } else if self.accept(Token::Colon) {
-                if !matches!(*s, Node::IDNode { .. }) {
+                if !matches!(stmt, Node::IDNode { .. }) {
                     panic!("Dictionary key must be a plain identifier");
                 }
 
-                if let Node::ArgumentNode(arg_node) = &mut a {
-                    arg_node.set_kwarg(s, Rc::from(self.statement()));
-                    potential = self.current_tok.clone();
+                let val = self.statement();
+                args.set_kwarg(Rc::from(stmt), Rc::from(val));
 
-                    //                    if !self.accept(Token::Comma) {
-                    //                        return a;
-                    //                    }
-
-                    arg_node.commas.push(potential.0);
-                }
-            } else if let Node::ArgumentNode(arg_node) = &mut a {
-                arg_node.append(s);
-                return a;
+                let potential = self.current_tok.clone();
+                self.accept(Token::Comma);
+                args.commas.push(potential.0);
+            } else {
+                args.append(Rc::from(stmt));
+                return Node::ArgumentNode(args);
             }
 
-            s = Rc::from(self.statement());
+            stmt = self.statement();
         }
 
-        a
+        Node::ArgumentNode(args)
     }
 
     fn method_call(&mut self, source: &Node) -> Node {
@@ -571,7 +575,7 @@ impl<'a> Parser<'a> {
             cond = self.accept(Token::EOL);
         }
 
-        Node::CodeBlock { lines: lines }
+        Node::CodeBlock { lines }
     }
 }
 
@@ -619,7 +623,7 @@ mod tests {
                             value: "cpp".to_string(),
                         }),
                     ],
-                    commas: vec![Token::Comma, Token::Comma, Token::RParen],
+                    commas: vec![Token::Comma, Token::Comma, Token::Comma, Token::RParen],
                     kwargs: BTreeMap::from([
                         (
                             Rc::from(Node::IDNode {
