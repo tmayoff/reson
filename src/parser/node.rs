@@ -88,7 +88,7 @@ pub enum Node {
         left: Rc<Node>,
         right: Rc<Node>,
     },
-    ComparisonNode {
+    Comparison {
         left: Rc<Node>,
         right: Rc<Node>,
         ctype: String,
@@ -105,8 +105,8 @@ pub enum Node {
         lines: Vec<Rc<Node>>,
     },
     Index(IndexNode),
-    MethodNode(MethodNode),
-    FunctionNode {
+    Method(MethodNode),
+    Function {
         func_name: String,
         args: Rc<Node>,
     },

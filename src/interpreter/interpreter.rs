@@ -147,7 +147,7 @@ impl Interpreter {
 
     fn evaluate_statement(&mut self, node: &Node) -> Option<ObjectTypes> {
         match &node {
-            Node::FunctionNode { func_name, args } => self.function_call(node, func_name, args),
+            Node::Function { func_name, args } => self.function_call(node, func_name, args),
             Node::BoolNode { value } => todo!(),
             Node::ID { value } => todo!(),
             Node::Number { value } => todo!(),
@@ -164,7 +164,7 @@ impl Interpreter {
             Node::Empty => todo!(),
             Node::OrNode { left, right } => todo!(),
             Node::AndNode { left, right } => todo!(),
-            Node::ComparisonNode { left, right, ctype } => todo!(),
+            Node::Comparison { left, right, ctype } => todo!(),
             Node::Arithmetic {
                 left,
                 right,
@@ -173,7 +173,7 @@ impl Interpreter {
             Node::NotNode { value } => todo!(),
             Node::CodeBlock { lines } => todo!(),
             Node::Index(_) => todo!(),
-            Node::MethodNode(_) => todo!(),
+            Node::Method(_) => todo!(),
             Node::Assignment { var_name, value } => todo!(),
             Node::PlusAssignmentNode { var_name, value } => todo!(),
             Node::ForeachClauseNode {

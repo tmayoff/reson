@@ -201,7 +201,7 @@ impl<'a> Parser<'a> {
 
         for (nodename, operator_type) in COMPARISON_MAP.clone() {
             if self.accept(nodename) {
-                return Node::ComparisonNode {
+                return Node::Comparison {
                     left: Rc::from(left),
                     right: Rc::from(self.e5()),
                     ctype: operator_type.to_string(),
@@ -210,7 +210,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.accept(Token::Not) && self.accept(Token::In) {
-            return Node::ComparisonNode {
+            return Node::Comparison {
                 left: Rc::from(left),
                 right: Rc::from(self.e5()),
                 ctype: "notin".to_string(),
@@ -297,7 +297,7 @@ impl<'a> Parser<'a> {
             }
 
             if let Node::ID { value: var_name } = &left {
-                left = Node::FunctionNode {
+                left = Node::Function {
                     func_name: var_name.to_string(),
                     args: Rc::from(args),
                 };
@@ -458,7 +458,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::RParen);
 
         let method = if let Node::ID { value: method_name } = methodname {
-            Node::MethodNode(MethodNode {
+            Node::Method(MethodNode {
                 source_object: Rc::from(source.to_owned()),
                 name: method_name,
                 args: Rc::from(args),
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn simple_test() {
         let expected = Node::CodeBlock {
-            lines: vec![Rc::from(Node::FunctionNode {
+            lines: vec![Rc::from(Node::Function {
                 func_name: "project".to_string(),
                 args: Rc::from(Node::Argument(ArgumentNode {
                     arguments: vec![Rc::from(Node::String {
@@ -589,7 +589,7 @@ mod tests {
     #[test]
     fn kwargs_test() {
         let expected = Node::CodeBlock {
-            lines: vec![Rc::from(Node::FunctionNode {
+            lines: vec![Rc::from(Node::Function {
                 func_name: "project".to_string(),
                 args: Rc::from(Node::Argument(ArgumentNode {
                     arguments: vec![
@@ -767,6 +767,87 @@ mod tests {
             else
 
             endif
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn comparison() {
+        let expected = Node::CodeBlock {
+            lines: vec![
+                Rc::from(Node::Comparison {
+                    left: Rc::from(Node::ID {
+                        value: "a".to_string(),
+                    }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    ctype: "<".to_string(),
+                }),
+                Rc::from(Node::Comparison {
+                    left: Rc::from(Node::ID {
+                        value: "b".to_string(),
+                    }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    ctype: ">".to_string(),
+                }),
+                Rc::from(Node::Comparison {
+                    left: Rc::from(Node::ID {
+                        value: "c".to_string(),
+                    }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    ctype: "<=".to_string(),
+                }),
+                Rc::from(Node::Comparison {
+                    left: Rc::from(Node::ID {
+                        value: "d".to_string(),
+                    }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    ctype: ">=".to_string(),
+                }),
+            ],
+        };
+
+        let code = r#"
+            a < 1
+            b > 1
+            c <= 1
+            d >= 1
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn methods() {
+        let expected = Node::CodeBlock {
+            lines: vec![
+                Rc::from(Node::Function {
+                    func_name: "project".to_string(),
+                    args: Rc::from(Node::Argument(ArgumentNode {
+                        ..Default::default()
+                    })),
+                }),
+                Rc::from(Node::Method(MethodNode {
+                    source_object: Rc::from(Node::ID {
+                        value: "a".to_string(),
+                    }),
+                    name: "len".to_string(),
+                    args: Rc::from(Node::Argument(ArgumentNode {
+                        ..Default::default()
+                    })),
+                })),
+            ],
+        };
+
+        let code = r#"
+            project()
+            a.len()
         "#;
 
         let mut p = Parser::new(code, "simple_test");
