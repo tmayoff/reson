@@ -149,32 +149,32 @@ impl Interpreter {
         match &node {
             Node::FunctionNode { func_name, args } => self.function_call(node, func_name, args),
             Node::BoolNode { value } => todo!(),
-            Node::IDNode { value } => todo!(),
-            Node::NumberNode { value } => todo!(),
-            Node::StringNode { value } => Some(self.holderify(ObjectTypes::Elementary(
+            Node::ID { value } => todo!(),
+            Node::Number { value } => todo!(),
+            Node::String { value } => Some(self.holderify(ObjectTypes::Elementary(
                 ElementaryTypes::Str(value.to_owned()),
             ))),
             Node::FStringNode { value } => todo!(),
             Node::MultilineFStringNode { value } => todo!(),
             Node::ContinueNode => todo!(),
             Node::BreakNode => todo!(),
-            Node::ArgumentNode(_) => todo!(),
-            Node::ArrayNode { args } => self.evaluate_arraystatement(args),
-            Node::DictNode { args } => todo!(),
+            Node::Argument(_) => todo!(),
+            Node::Array { args } => self.evaluate_arraystatement(args),
+            Node::Dict { args } => todo!(),
             Node::Empty => todo!(),
             Node::OrNode { left, right } => todo!(),
             Node::AndNode { left, right } => todo!(),
             Node::ComparisonNode { left, right, ctype } => todo!(),
-            Node::ArithmeticNode {
+            Node::Arithmetic {
                 left,
                 right,
                 operation,
             } => todo!(),
             Node::NotNode { value } => todo!(),
             Node::CodeBlock { lines } => todo!(),
-            Node::IndexNode(_) => todo!(),
+            Node::Index(_) => todo!(),
             Node::MethodNode(_) => todo!(),
-            Node::AssignmentNode { var_name, value } => todo!(),
+            Node::Assignment { var_name, value } => todo!(),
             Node::PlusAssignmentNode { var_name, value } => todo!(),
             Node::ForeachClauseNode {
                 varname,
@@ -184,7 +184,7 @@ impl Interpreter {
             Node::IfNode { condition, block } => todo!(),
             Node::IfClauseNode { ifs, elseblock } => todo!(),
             Node::UMinusNode { value } => todo!(),
-            Node::TernaryNode {
+            Node::Ternary {
                 condition,
                 trueblock,
                 falseblock,
@@ -256,8 +256,8 @@ impl Interpreter {
         &mut self,
         args: &Node,
     ) -> (Vec<ObjectTypes>, HashMap<String, ObjectTypes>) {
-        assert!(matches!(args, Node::ArgumentNode(_)));
-        if let Node::ArgumentNode(arg_node) = &args {
+        assert!(matches!(args, Node::Argument(_)));
+        if let Node::Argument(arg_node) = &args {
             if arg_node.incorrect_order() {
                 panic!("All keywords must be after positional arguments");
             }
@@ -305,9 +305,9 @@ impl Interpreter {
     }
 
     fn key_resolver(key: &Node) -> String {
-        assert!(matches!(key, Node::IDNode { .. }), "Invalid kwargs format");
+        assert!(matches!(key, Node::ID { .. }), "Invalid kwargs format");
 
-        if let Node::IDNode { value } = key {
+        if let Node::ID { value } = key {
             return value.clone();
         }
 

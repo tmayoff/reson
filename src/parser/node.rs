@@ -44,7 +44,7 @@ pub struct MethodNode {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndexNode {
-    pub iobject: Rc<Node>,
+    pub indexed_node: Rc<Node>,
     pub index: Rc<Node>,
 }
 
@@ -56,13 +56,13 @@ pub enum Node {
     BoolNode {
         value: bool,
     },
-    IDNode {
+    ID {
         value: String,
     },
-    NumberNode {
+    Number {
         value: i32,
     },
-    StringNode {
+    String {
         value: String,
     },
     FStringNode {
@@ -73,11 +73,11 @@ pub enum Node {
     },
     ContinueNode,
     BreakNode,
-    ArgumentNode(ArgumentNode),
-    ArrayNode {
+    Argument(ArgumentNode),
+    Array {
         args: Rc<Node>,
     },
-    DictNode {
+    Dict {
         args: Rc<Node>,
     },
     OrNode {
@@ -93,7 +93,7 @@ pub enum Node {
         right: Rc<Node>,
         ctype: String,
     },
-    ArithmeticNode {
+    Arithmetic {
         left: Rc<Node>,
         right: Rc<Node>,
         operation: String,
@@ -104,13 +104,13 @@ pub enum Node {
     CodeBlock {
         lines: Vec<Rc<Node>>,
     },
-    IndexNode(IndexNode),
+    Index(IndexNode),
     MethodNode(MethodNode),
     FunctionNode {
         func_name: String,
         args: Rc<Node>,
     },
-    AssignmentNode {
+    Assignment {
         var_name: String,
         value: Rc<Node>,
     },
@@ -134,7 +134,7 @@ pub enum Node {
     UMinusNode {
         value: Rc<Node>,
     },
-    TernaryNode {
+    Ternary {
         condition: Rc<Node>,
         trueblock: Rc<Node>,
         falseblock: Rc<Node>,

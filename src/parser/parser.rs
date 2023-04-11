@@ -116,25 +116,25 @@ impl<'a> Parser<'a> {
     fn e1(&mut self) -> Node {
         let left = self.e2();
         if self.accept(Token::PlusAssign) {
-            let value = self.e1();
-            if !matches!(left, Node::IDNode { .. }) {
+            if !matches!(left, Node::ID { .. }) {
                 panic!("Plus Assignment target must be an ID");
             }
 
-            if let Node::IDNode { value: var_name } = &left {
+            let value = self.e1();
+            if let Node::ID { value: var_name } = &left {
                 return Node::PlusAssignmentNode {
                     var_name: var_name.to_owned(),
                     value: Rc::from(value),
                 };
             }
         } else if self.accept(Token::Assign) {
-            let value = self.e1();
-            if !matches!(left, Node::IDNode { .. }) {
+            if !matches!(left, Node::ID { .. }) {
                 panic!("Assignment target must be an ID");
             }
 
-            if let Node::IDNode { value: var_name } = &left {
-                return Node::AssignmentNode {
+            let value = self.e1();
+            if let Node::ID { value: var_name } = &left {
+                return Node::Assignment {
                     var_name: var_name.to_owned(),
                     value: Rc::from(value),
                 };
@@ -149,7 +149,7 @@ impl<'a> Parser<'a> {
             self.expect(Token::Colon);
             let falseblock = self.e1();
             self.in_ternary = false;
-            return Node::TernaryNode {
+            return Node::Ternary {
                 condition: Rc::from(left),
                 trueblock: Rc::from(trueblock),
                 falseblock: Rc::from(falseblock),
@@ -231,7 +231,7 @@ impl<'a> Parser<'a> {
         loop {
             let op = self.accept_any(vec![Token::Plus, Token::Dash]);
             if let Some(op) = op {
-                left = Node::ArithmeticNode {
+                left = Node::Arithmetic {
                     left: Rc::from(left),
                     right: Rc::from(self.e5muldiv()),
                     operation: op_map[&op].to_string(),
@@ -255,7 +255,7 @@ impl<'a> Parser<'a> {
         loop {
             let op = self.accept_any(vec![Token::Percent, Token::Star, Token::FSlash]);
             if let Some(op) = op {
-                left = Node::ArithmeticNode {
+                left = Node::Arithmetic {
                     left: Rc::from(left),
                     right: Rc::from(self.e6()),
                     operation: op_map[&op].to_owned(),
@@ -292,11 +292,11 @@ impl<'a> Parser<'a> {
             let args = self.args();
             self.block_expect(Token::RParen, &block_start.0);
 
-            if !matches!(left, Node::IDNode { .. }) {
+            if !matches!(left, Node::ID { .. }) {
                 panic!("Function call must be applied to plain ID");
             }
 
-            if let Node::IDNode { value: var_name } = &left {
+            if let Node::ID { value: var_name } = &left {
                 left = Node::FunctionNode {
                     func_name: var_name.to_string(),
                     args: Rc::from(args),
@@ -311,7 +311,7 @@ impl<'a> Parser<'a> {
                 go_again = true;
                 left = self.method_call(&left);
             }
-            if self.accept(Token::LCurly) {
+            if self.accept(Token::LBrace) {
                 go_again = true;
                 left = self.index_call(&left);
             }
@@ -330,14 +330,14 @@ impl<'a> Parser<'a> {
         } else if self.accept(Token::LBrace) {
             let args = self.args();
             self.block_expect(Token::RBrace, &block_start.0);
-            Node::ArrayNode {
+            Node::Array {
                 args: Rc::from(args),
             }
-        } else if self.accept(Token::LBrace) {
+        } else if self.accept(Token::LCurly) {
             let key_values = self.key_values();
-            self.block_expect(Token::RBrace, &block_start.0);
+            self.block_expect(Token::RCurly, &block_start.0);
 
-            Node::DictNode {
+            Node::Dict {
                 args: Rc::from(key_values),
             }
         } else {
@@ -358,19 +358,19 @@ impl<'a> Parser<'a> {
 
         if self.accept(Token::ID("".to_string())) {
             if let Token::ID(id) = t.0 {
-                return Node::IDNode { value: id };
+                return Node::ID { value: id };
             }
         }
 
         if self.accept(Token::Number(0)) {
             if let Token::Number(num) = t.0 {
-                return Node::NumberNode { value: num };
+                return Node::Number { value: num };
             }
         }
 
         if self.accept(Token::String("".to_string())) {
             if let Token::String(str) = t.0 {
-                return Node::StringNode { value: str };
+                return Node::String { value: str };
             }
         }
 
@@ -395,28 +395,24 @@ impl<'a> Parser<'a> {
     }
 
     fn key_values(&mut self) -> Node {
-        let mut s = Rc::from(self.statement());
-        let mut a = Node::ArgumentNode(ArgumentNode::default());
+        let mut stmt = self.statement();
+        let mut args = ArgumentNode::default();
 
-        while *s != Node::Empty {
-            if self.accept(Token::Colon) {
-                if let Node::ArgumentNode(ref mut arg_node) = a {
-                    arg_node.set_kwarg_no_check(s, Rc::from(self.statement()));
-                    let potential = self.current_tok.clone();
-                    if !self.accept(Token::Comma) {
-                        return a;
-                    }
+        while stmt != Node::Empty {
+            self.expect(Token::Colon);
 
-                    arg_node.commas.push(potential.0);
-                }
-            } else {
-                panic!("Only key:value pairs are valid in dict construction");
+            args.set_kwarg_no_check(Rc::from(stmt), Rc::from(self.statement()));
+            let potential = self.current_tok.clone();
+            if !self.accept(Token::Comma) {
+                return Node::Argument(args);
             }
 
-            s = Rc::from(self.statement());
+            args.commas.push(potential.0);
+
+            stmt = self.statement();
         }
 
-        a
+        Node::Argument(args)
     }
 
     fn args(&mut self) -> Node {
@@ -430,7 +426,7 @@ impl<'a> Parser<'a> {
                 args.commas.push(potential.0);
                 args.append(Rc::from(stmt));
             } else if self.accept(Token::Colon) {
-                if !matches!(stmt, Node::IDNode { .. }) {
+                if !matches!(stmt, Node::ID { .. }) {
                     panic!("Dictionary key must be a plain identifier");
                 }
 
@@ -442,18 +438,18 @@ impl<'a> Parser<'a> {
                 args.commas.push(potential.0);
             } else {
                 args.append(Rc::from(stmt));
-                return Node::ArgumentNode(args);
+                return Node::Argument(args);
             }
 
             stmt = self.statement();
         }
 
-        Node::ArgumentNode(args)
+        Node::Argument(args)
     }
 
     fn method_call(&mut self, source: &Node) -> Node {
         let methodname = self.e9();
-        if !matches!(methodname, Node::IDNode { .. }) {
+        if !matches!(methodname, Node::ID { .. }) {
             panic!("Method name must be plain ID");
         }
 
@@ -461,7 +457,7 @@ impl<'a> Parser<'a> {
         let args = self.args();
         self.expect(Token::RParen);
 
-        let method = if let Node::IDNode { value: method_name } = methodname {
+        let method = if let Node::ID { value: method_name } = methodname {
             Node::MethodNode(MethodNode {
                 source_object: Rc::from(source.to_owned()),
                 name: method_name,
@@ -480,70 +476,51 @@ impl<'a> Parser<'a> {
 
     fn index_call(&mut self, source_object: &Node) -> Node {
         let index_statement = self.statement();
-        self.expect(Token::RCurly);
-        Node::IndexNode(IndexNode {
-            iobject: Rc::from(source_object.to_owned()),
+        self.expect(Token::RBrace);
+        Node::Index(IndexNode {
+            indexed_node: Rc::from(source_object.to_owned()),
             index: Rc::from(index_statement),
         })
     }
 
     fn ifblock(&mut self) -> Node {
         let condition = self.statement();
-        let clause = Node::IfClauseNode {
-            ifs: Vec::new(),
-            elseblock: None,
-        };
+        let mut ifs = Vec::new();
+
         self.expect(Token::EOL);
         let block = self.codeblock();
-        if let Node::IfClauseNode {
-            ref mut ifs,
-            elseblock: _,
-        } = clause.clone()
-        {
-            ifs.push(Rc::from(Node::IfNode {
-                condition: Rc::from(condition),
-                block: Rc::from(block),
-            }));
-        }
+        ifs.push(Rc::from(Node::IfNode {
+            condition: Rc::from(condition),
+            block: Rc::from(block),
+        }));
 
-        self.elseifblock(&clause);
-        if let Node::IfClauseNode {
-            ifs: _,
-            mut elseblock,
-        } = clause.clone()
-        {
-            elseblock = Some(Rc::from(self.elseblock()));
-        }
+        self.elseifblock(&mut ifs);
 
-        clause
+        let elseblock = self.elseblock().map(Rc::from);
+
+        Node::IfClauseNode { ifs, elseblock }
     }
 
-    fn elseifblock(&mut self, clause: &Node) {
+    fn elseifblock(&mut self, ifs: &mut Vec<Rc<Node>>) {
         while self.accept(Token::ElIf) {
             let s = self.statement();
             self.expect(Token::EOL);
             let b = self.codeblock();
 
-            if let Node::IfClauseNode {
-                mut ifs,
-                elseblock: _,
-            } = clause.clone()
-            {
-                ifs.push(Rc::from(Node::IfNode {
-                    condition: Rc::from(s),
-                    block: Rc::from(b),
-                }));
-            }
+            ifs.push(Rc::from(Node::IfNode {
+                condition: Rc::from(s),
+                block: Rc::from(b),
+            }));
         }
     }
 
-    fn elseblock(&mut self) -> Node {
+    fn elseblock(&mut self) -> Option<Node> {
         if self.accept(Token::Else) {
             self.expect(Token::EOL);
-            return self.codeblock();
+            Some(self.codeblock())
+        } else {
+            None
         }
-
-        Node::Empty
     }
 
     fn line(&mut self) -> Node {
@@ -588,8 +565,8 @@ mod tests {
         let expected = Node::CodeBlock {
             lines: vec![Rc::from(Node::FunctionNode {
                 func_name: "project".to_string(),
-                args: Rc::from(Node::ArgumentNode(ArgumentNode {
-                    arguments: vec![Rc::from(Node::StringNode {
+                args: Rc::from(Node::Argument(ArgumentNode {
+                    arguments: vec![Rc::from(Node::String {
                         value: "simple".to_string(),
                     })],
                     commas: Vec::new(),
@@ -614,30 +591,30 @@ mod tests {
         let expected = Node::CodeBlock {
             lines: vec![Rc::from(Node::FunctionNode {
                 func_name: "project".to_string(),
-                args: Rc::from(Node::ArgumentNode(ArgumentNode {
+                args: Rc::from(Node::Argument(ArgumentNode {
                     arguments: vec![
-                        Rc::from(Node::StringNode {
+                        Rc::from(Node::String {
                             value: "kwargs_test".to_string(),
                         }),
-                        Rc::from(Node::StringNode {
+                        Rc::from(Node::String {
                             value: "cpp".to_string(),
                         }),
                     ],
                     commas: vec![Token::Comma, Token::Comma, Token::Comma, Token::RParen],
                     kwargs: BTreeMap::from([
                         (
-                            Rc::from(Node::IDNode {
+                            Rc::from(Node::ID {
                                 value: "version".to_string(),
                             }),
-                            Rc::from(Node::StringNode {
+                            Rc::from(Node::String {
                                 value: "0.1.1".to_string(),
                             }),
                         ),
                         (
-                            Rc::from(Node::IDNode {
+                            Rc::from(Node::ID {
                                 value: "meson_version".to_string(),
                             }),
-                            Rc::from(Node::StringNode {
+                            Rc::from(Node::String {
                                 value: "1.0.0".to_string(),
                             }),
                         ),
@@ -649,6 +626,225 @@ mod tests {
 
         let code = r#"
             project('kwargs_test', 'cpp', version: '0.1.1', meson_version: '1.0.0')
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn arithmetic() {
+        let expected = Node::CodeBlock {
+            lines: vec![
+                Rc::from(Node::Arithmetic {
+                    left: Rc::from(Node::Number { value: 1 }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    operation: "add".to_string(),
+                }),
+                Rc::from(Node::Arithmetic {
+                    left: Rc::from(Node::Number { value: 1 }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    operation: "sub".to_string(),
+                }),
+                Rc::from(Node::Arithmetic {
+                    left: Rc::from(Node::Number { value: 1 }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    operation: "mul".to_string(),
+                }),
+                Rc::from(Node::Arithmetic {
+                    left: Rc::from(Node::Number { value: 1 }),
+                    right: Rc::from(Node::Number { value: 1 }),
+                    operation: "div".to_string(),
+                }),
+                Rc::from(Node::PlusAssignmentNode {
+                    var_name: "a".to_string(),
+                    value: Rc::from(Node::Number { value: 1 }),
+                }),
+            ],
+        };
+
+        let code = r#"
+            1 + 1
+            1 - 1
+            1 * 1
+            1 / 1
+            a += 1
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn assignment() {
+        let expected = Node::CodeBlock {
+            lines: vec![
+                Rc::from(Node::Assignment {
+                    var_name: "a".to_string(),
+                    value: Rc::from(Node::Number { value: 1 }),
+                }),
+                Rc::from(Node::Assignment {
+                    var_name: "b".to_string(),
+                    value: Rc::from(Node::String {
+                        value: "hello".to_string(),
+                    }),
+                }),
+            ],
+        };
+
+        let code = r#"
+            a = 1
+            b = 'hello'
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn ternary() {
+        let expected = Node::CodeBlock {
+            lines: vec![Rc::from(Node::Assignment {
+                var_name: String::from("c"),
+                value: Rc::from(Node::Ternary {
+                    condition: Rc::from(Node::ID {
+                        value: "condition".to_string(),
+                    }),
+                    trueblock: Rc::from(Node::String {
+                        value: "hello".to_string(),
+                    }),
+                    falseblock: Rc::from(Node::String {
+                        value: "world".to_string(),
+                    }),
+                }),
+            })],
+        };
+
+        let code = r#"
+            c = condition ? 'hello' : 'world'
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn ifs() {
+        let expected = Node::CodeBlock {
+            lines: vec![
+                Rc::from(Node::IfClauseNode {
+                    ifs: vec![Rc::from(Node::IfNode {
+                        condition: Rc::from(Node::BoolNode { value: true }),
+                        block: Rc::from(Node::CodeBlock { lines: Vec::new() }),
+                    })],
+                    elseblock: None,
+                }),
+                Rc::from(Node::IfClauseNode {
+                    ifs: vec![Rc::from(Node::IfNode {
+                        condition: Rc::from(Node::BoolNode { value: false }),
+                        block: Rc::from(Node::CodeBlock { lines: Vec::new() }),
+                    })],
+                    elseblock: Some(Rc::from(Node::CodeBlock { lines: Vec::new() })),
+                }),
+            ],
+        };
+
+        let code = r#"
+            if true
+                
+            endif
+
+            if false
+
+            else
+
+            endif
+        "#;
+
+        let mut p = Parser::new(code, "simple_test");
+        let ast = p.parse();
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn collections() {
+        let expected = Node::CodeBlock {
+            lines: vec![
+                Rc::from(Node::Assignment {
+                    var_name: "a".to_string(),
+                    value: Rc::from(Node::Array {
+                        args: Rc::from(Node::Argument(ArgumentNode {
+                            arguments: vec![
+                                Rc::from(Node::Number { value: 1 }),
+                                Rc::from(Node::Number { value: 2 }),
+                                Rc::from(Node::Number { value: 3 }),
+                            ],
+                            commas: vec![Token::Comma, Token::Comma],
+                            kwargs: Default::default(),
+                            order_error: false,
+                        })),
+                    }),
+                }),
+                Rc::from(Node::Index(IndexNode {
+                    indexed_node: Rc::from(Node::ID {
+                        value: "a".to_string(),
+                    }),
+                    index: Rc::from(Node::Number { value: 1 }),
+                })),
+                Rc::from(Node::Assignment {
+                    var_name: "b".to_string(),
+                    value: Rc::from(Node::Dict {
+                        args: Rc::from(Node::Argument(ArgumentNode {
+                            arguments: Default::default(),
+                            commas: vec![Token::Comma],
+                            kwargs: BTreeMap::from([
+                                (
+                                    Rc::from(Node::String {
+                                        value: "key".to_string(),
+                                    }),
+                                    Rc::from(Node::String {
+                                        value: "value".to_string(),
+                                    }),
+                                ),
+                                (
+                                    Rc::from(Node::String {
+                                        value: "hello".to_string(),
+                                    }),
+                                    Rc::from(Node::String {
+                                        value: "world".to_string(),
+                                    }),
+                                ),
+                            ]),
+                            order_error: false,
+                        })),
+                    }),
+                }),
+                Rc::from(Node::Index(IndexNode {
+                    indexed_node: Rc::from(Node::ID {
+                        value: "b".to_string(),
+                    }),
+                    index: Rc::from(Node::String {
+                        value: "key".to_string(),
+                    }),
+                })),
+            ],
+        };
+
+        let code = r#"
+             a = [1, 2, 3]
+             a[1]
+
+            b = {'key': 'value', 'hello': 'world'}
+            b['key']
         "#;
 
         let mut p = Parser::new(code, "simple_test");
