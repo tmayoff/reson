@@ -41,7 +41,7 @@ pub enum Token {
         lex.slice()[1..len-1].to_owned()
     })]
     String(String),
-    #[regex("([A-Z]|[a-z])+", |lex| lex.slice().to_owned())]
+    #[regex("([A-Za-z_-])+", |lex| lex.slice().to_owned())]
     ID(String),
     #[regex("-?[0-9]+", |lex| lex.slice().parse())]
     Number(i32),
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn lexer_test() {
         let input = r#"
-        true false if else elif endif and or not foreach endforeach in continue break ignore
+        true false if else elif endif and or not foreach endforeach in continue break ignore meson_version
         '' 'Hello World'
         ()
         "#;
@@ -133,6 +133,7 @@ mod tests {
             Token::Continue,
             Token::Break,
             Token::Ignore,
+            Token::ID("meson_version".to_string()),
             Token::EOL,
             Token::String("".to_string()),
             Token::String("Hello World".to_string()),
