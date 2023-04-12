@@ -1,4 +1,4 @@
-use logos_derive::Logos;
+use logos::Logos;
 
 #[derive(Logos, Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Token {
@@ -43,7 +43,7 @@ pub enum Token {
     String(String),
     #[regex("([A-Za-z_-])+", |lex| lex.slice().to_owned())]
     ID(String),
-    #[regex("-?[0-9]+", |lex| lex.slice().parse())]
+    #[regex("-?[0-9]+", |lex| lex.slice().parse::<i32>().expect("Failed to parse int"))]
     Number(i32),
     //    #[regex("")]
     //    EolCont,
@@ -101,7 +101,6 @@ pub enum Token {
     QuestionMark,
 
     #[regex(r"[ \t]+", logos::skip)]
-    #[error]
     EOF,
 }
 
@@ -148,7 +147,7 @@ mod tests {
             let next = lexer.next().unwrap();
 
             assert!(
-                next.clone() == expected.clone(),
+                next.clone() == Ok(expected.clone()),
                 "Got {:?}, expected {:?}",
                 next,
                 expected

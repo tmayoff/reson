@@ -51,7 +51,10 @@ impl<'a> Parser<'a> {
     fn getsym(&mut self) {
         let t = self.lexer.next();
         match t {
-            Some(t) => self.current_tok = t,
+            Some(t) => {
+                let tok = t.0.expect("Failed to get token");
+                self.current_tok = (tok, t.1)
+            }
             None => self.current_tok = (Token::EOF, Range::default()),
         }
     }
