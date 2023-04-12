@@ -19,7 +19,7 @@ use crate::backend::ninja::NinjaBackend;
 use crate::backend::Backend;
 use crate::build::Build;
 use crate::environment::Environment;
-use crate::interpreter::interpreter::Interpreter;
+use crate::interpreter::Interpreter;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_FILE_NAME: &str = "meson.build";
