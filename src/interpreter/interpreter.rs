@@ -1,5 +1,5 @@
 use super::file::File;
-use super::objects::{self, unholder, ElementaryTypes, ObjectTypes};
+use super::objects::{self, unholder, ElementaryTypes, Object};
 use crate::build::{BuildTarget, Target};
 use crate::compiler::Compiler;
 use crate::parser::parser::Parser;
@@ -8,6 +8,7 @@ use crate::{backend::ninja::NinjaBackend, build::TargetType};
 use crate::{build::Build, environment::Environment, parser::node::Node, BUILD_FILE_NAME};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::{collections::HashMap, fs};
 
 #[derive(Default, Clone)]
@@ -26,6 +27,8 @@ pub struct Interpreter {
     argument_depth: i32,
 
     ast: Option<Node>,
+
+    variables: HashMap<String, Object>,
 }
 
 impl Interpreter {
@@ -126,54 +129,61 @@ impl Interpreter {
         }
     }
 
-    fn evaluate_statement(&mut self, node: &Node) -> Option<ObjectTypes> {
+    fn evaluate_statement(&mut self, node: &Node) -> Option<Object> {
         match &node {
             Node::Function { func_name, args } => self.function_call(node, func_name, args),
-            Node::BoolNode { value } => todo!(),
-            Node::ID { value } => todo!(),
-            Node::Number { value } => todo!(),
-            Node::String { value } => Some(self.holderify(ObjectTypes::Elementary(
-                ElementaryTypes::Str(value.to_owned()),
-            ))),
-            Node::FStringNode { value } => todo!(),
-            Node::MultilineFStringNode { value } => todo!(),
-            Node::ContinueNode => todo!(),
-            Node::BreakNode => todo!(),
-            Node::Argument(_) => todo!(),
+            Node::BoolNode { value } => {
+                Some(self.holderify(Object::Elementary(ElementaryTypes::Bool(value.to_owned()))))
+            }
+            Node::ID { value } => None,
+            Node::Number { value } => {
+                Some(self.holderify(Object::Elementary(ElementaryTypes::Int(value.to_owned()))))
+            }
+            Node::String { value } => {
+                Some(self.holderify(Object::Elementary(ElementaryTypes::Str(value.to_owned()))))
+            }
+            Node::FStringNode { value } => None,
+            Node::MultilineFStringNode { value } => None,
+            Node::ContinueNode => None,
+            Node::BreakNode => None,
+            Node::Argument(_) => None,
             Node::Array { args } => self.evaluate_arraystatement(args),
-            Node::Dict { args } => todo!(),
-            Node::Empty => todo!(),
-            Node::OrNode { left, right } => todo!(),
-            Node::AndNode { left, right } => todo!(),
-            Node::Comparison { left, right, ctype } => todo!(),
+            Node::Dict { args } => self.evaluate_dictstatement(args),
+            Node::Empty => None,
+            Node::OrNode { left, right } => None,
+            Node::AndNode { left, right } => None,
+            Node::Comparison { left, right, ctype } => None,
             Node::Arithmetic {
                 left,
                 right,
                 operation,
-            } => todo!(),
-            Node::NotNode { value } => todo!(),
-            Node::CodeBlock { lines } => todo!(),
-            Node::Index(_) => todo!(),
-            Node::Method(_) => todo!(),
-            Node::Assignment { var_name, value } => todo!(),
-            Node::PlusAssignmentNode { var_name, value } => todo!(),
+            } => None,
+            Node::NotNode { value } => None,
+            Node::CodeBlock { lines } => None,
+            Node::Index(_) => None,
+            Node::Method(_) => None,
+            Node::Assignment { var_name, value } => {
+                self.assignment(&var_name, value);
+                None
+            }
+            Node::PlusAssignmentNode { var_name, value } => None,
             Node::ForeachClauseNode {
                 varname,
                 items,
                 block,
-            } => todo!(),
-            Node::IfNode { condition, block } => todo!(),
-            Node::IfClauseNode { ifs, elseblock } => todo!(),
-            Node::UMinusNode { value } => todo!(),
+            } => None,
+            Node::IfNode { condition, block } => None,
+            Node::IfClauseNode { ifs, elseblock } => None,
+            Node::UMinusNode { value } => None,
             Node::Ternary {
                 condition,
                 trueblock,
                 falseblock,
-            } => todo!(),
+            } => None,
         }
     }
 
-    fn function_call(&mut self, _node: &Node, func_name: &str, args: &Node) -> Option<ObjectTypes> {
+    fn function_call(&mut self, _node: &Node, func_name: &str, args: &Node) -> Option<Object> {
         let (h_posargs, h_kwargs) = self.reduce_arguments(args);
         let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
 
@@ -182,7 +192,7 @@ impl Interpreter {
         None
     }
 
-    fn evaluate_arraystatement(&mut self, args: &Node) -> Option<ObjectTypes> {
+    fn evaluate_arraystatement(&mut self, args: &Node) -> Option<Object> {
         let (args, kwargs) = self.reduce_arguments(args);
         if !kwargs.is_empty() {
             panic!("Keywork arguments are invalid in array construction");
@@ -190,26 +200,30 @@ impl Interpreter {
 
         let args = args.iter().map(unholder).collect();
 
-        Some(ObjectTypes::Elementary(ElementaryTypes::List(args)))
+        Some(Object::Elementary(ElementaryTypes::List(args)))
     }
 
-    fn holderify(&self, value: ObjectTypes) -> ObjectTypes {
+    fn evaluate_dictstatement(&mut self, args: &Node) -> Option<Object> {
+        Some(Object::Elementary(ElementaryTypes::Dict))
+    }
+
+    fn holderify(&self, value: Object) -> Object {
         match value {
-            ObjectTypes::Elementary(v) => match v {
-                ElementaryTypes::Void => todo!(),
-                ElementaryTypes::Bool(_) => todo!(),
+            Object::Elementary(v) => match v {
+                // ElementaryTypes::Void => todo!(),
+                ElementaryTypes::Bool(b) => Object::Elementary(ElementaryTypes::Bool(b)),
                 ElementaryTypes::Dict => todo!(),
-                ElementaryTypes::Int(_) => todo!(),
+                ElementaryTypes::Int(i) => Object::Elementary(ElementaryTypes::Int(i)),
                 ElementaryTypes::List(_) => todo!(),
-                ElementaryTypes::Str(s) => ObjectTypes::Elementary(ElementaryTypes::Str(s)),
+                ElementaryTypes::Str(s) => Object::Elementary(ElementaryTypes::Str(s)),
             },
         }
     }
 
     fn unholder_args(
         &self,
-        args: Vec<ObjectTypes>,
-        kwargs: HashMap<String, ObjectTypes>,
+        args: Vec<Object>,
+        kwargs: HashMap<String, Object>,
     ) -> (Vec<ElementaryTypes>, HashMap<String, ElementaryTypes>) {
         let a = args.into_iter().map(|a| objects::unholder(&a)).collect();
 
@@ -221,10 +235,7 @@ impl Interpreter {
         (a, k)
     }
 
-    fn reduce_arguments(
-        &mut self,
-        args: &Node,
-    ) -> (Vec<ObjectTypes>, HashMap<String, ObjectTypes>) {
+    fn reduce_arguments(&mut self, args: &Node) -> (Vec<Object>, HashMap<String, Object>) {
         assert!(matches!(args, Node::Argument(_)));
         if let Node::Argument(arg_node) = &args {
             if arg_node.incorrect_order() {
@@ -240,7 +251,7 @@ impl Interpreter {
                 reduced_pos.push(s);
             }
 
-            let mut reduced_kw: HashMap<String, ObjectTypes> = HashMap::new();
+            let mut reduced_kw: HashMap<String, Object> = HashMap::new();
             for (key, val) in &arg_node.kwargs {
                 let reduced_key = Self::key_resolver(key);
                 let reduced_val = self
@@ -256,10 +267,7 @@ impl Interpreter {
         unreachable!();
     }
 
-    fn expand_default_kw(
-        &self,
-        kwargs: HashMap<String, ObjectTypes>,
-    ) -> HashMap<String, ObjectTypes> {
+    fn expand_default_kw(&self, kwargs: HashMap<String, Object>) -> HashMap<String, Object> {
         let newkwargs = kwargs;
         if !newkwargs.contains_key("kwargs") {
             return newkwargs;
@@ -281,6 +289,18 @@ impl Interpreter {
         }
 
         String::new()
+    }
+
+    fn assignment(&mut self, var_name: &str, value: &Rc<Node>) {
+        let variable = self
+            .evaluate_statement(value)
+            .expect("Assignment must be made");
+
+        self.set_variable(var_name, variable);
+    }
+
+    fn set_variable(&mut self, var_name: &str, variable: Object) {
+        self.variables.insert(var_name.to_string(), variable);
     }
 
     fn process_func(
@@ -343,7 +363,6 @@ impl Interpreter {
 
         let project_langs = match &args[1] {
             ElementaryTypes::List(langs_list) => {
-                //
                 let mut langs = Vec::new();
 
                 for l in langs_list {
@@ -402,10 +421,11 @@ impl Interpreter {
         let mut sources = args;
 
         let holdable = sources.remove(0);
-        let mut name = String::new();
-        if let ElementaryTypes::Str(n) = holdable {
-            name = n;
-        }
+        let name = if let ElementaryTypes::Str(n) = holdable {
+            n
+        } else {
+            String::new()
+        };
 
         match targetclass {
             TargetType::BuildTarget(b) => b.filename = name.to_owned(),
@@ -433,15 +453,14 @@ impl Interpreter {
 
         self.validate_forbidden_targets(name);
 
-        let idname = tobj.get_id();
-        if self.build.targets.contains_key(&idname) {
+        if self.build.targets.contains_key(name) {
             panic!(
                 "Tried to create target {}, but a target of that name already exists",
-                &idname
+                name
             );
         }
 
-        self.build.targets.insert(idname, tobj);
+        self.build.targets.insert(name.to_string(), tobj);
     }
 
     fn validate_forbidden_targets(&self, name: &str) {
@@ -563,7 +582,7 @@ mod tests {
     #[test]
     fn multiple_langs_test() {
         let code = r"
-            project('simple', ['cpp'], version: '0.1')
+            project('simple', ['cpp', 'cpp'], version: '0.1')
         ";
 
         let ast = Parser::new(code, "testfile").parse();
@@ -581,6 +600,55 @@ mod tests {
 
         assert_eq!(&inter.build.project_name, "simple");
         assert!(inter.environment.coredata.compilers.contains_key("cpp"));
+    }
+
+    #[test]
+    fn vars_test() {
+        let code = r"
+            project('simple', ['cpp'], version: '0.1')
+
+            a = 'Hello World'
+            b = true
+            c = 100
+            d = ['Hello World', 1]
+            e = {'Hello': 'World'}
+        ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        let expected = HashMap::from([
+            (
+                "a",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello World"))),
+            ),
+            ("b", Object::Elementary(ElementaryTypes::Bool(true))),
+            ("c", Object::Elementary(ElementaryTypes::Int(100))),
+            (
+                "d",
+                Object::Elementary(ElementaryTypes::List(vec![
+                    ElementaryTypes::Str(String::from("Hello World")),
+                    ElementaryTypes::Int(1),
+                ])),
+            ),
+            ("e", Object::Elementary(ElementaryTypes::Dict)),
+        ]);
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(inter.variables.len(), 5);
+        for t in expected {
+            assert!(inter.variables.contains_key(t.0));
+            assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
+        }
     }
 
     #[test]
@@ -608,5 +676,6 @@ mod tests {
         assert!(inter.environment.coredata.compilers.contains_key("cpp"));
 
         assert!(!inter.build.targets.is_empty());
+        assert!(inter.build.targets.contains_key("simple_exe"));
     }
 }
