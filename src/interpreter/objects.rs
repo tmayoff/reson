@@ -1,18 +1,14 @@
-use super::file::File;
-
-#[derive(Clone)]
-pub enum ObjectTypes {
-    Builtin(BuiltinTypes),
-    Returned(ReturnedObjectTypes),
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Object {
     Elementary(ElementaryTypes),
 }
 
 #[derive(Clone)]
 pub enum BuiltinTypes {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ElementaryTypes {
-    Void,
+    // Void,
     Bool(bool),
     Dict,
     Int(i32),
@@ -22,13 +18,11 @@ pub enum ElementaryTypes {
 
 #[derive(Clone)]
 pub enum ReturnedObjectTypes {
-    File(File),
+    // File(File),
 }
 
-pub fn unholder(object: &ObjectTypes) -> ElementaryTypes {
+pub fn unholder(object: &Object) -> ElementaryTypes {
     match object {
-        ObjectTypes::Builtin(_) => todo!(),
-        ObjectTypes::Returned(_) => todo!(),
-        ObjectTypes::Elementary(e) => e.to_owned(),
+        Object::Elementary(e) => e.to_owned(),
     }
 }
