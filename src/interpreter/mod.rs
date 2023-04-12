@@ -1,7 +1,8 @@
 pub mod file;
+mod functions;
 mod objects;
 
-use crate::build::{BuildTarget, Target};
+use crate::build::Target;
 use crate::compiler::Compiler;
 use crate::parser::parser::Parser;
 use crate::utils::MachineChoice;
@@ -138,61 +139,52 @@ impl Interpreter {
             Node::BoolNode { value } => {
                 Some(self.holderify(Object::Elementary(ElementaryTypes::Bool(value.to_owned()))))
             }
-            Node::ID { value } => None,
+            Node::ID { value } => todo!(),
             Node::Number { value } => {
                 Some(self.holderify(Object::Elementary(ElementaryTypes::Int(value.to_owned()))))
             }
             Node::String { value } => {
                 Some(self.holderify(Object::Elementary(ElementaryTypes::Str(value.to_owned()))))
             }
-            Node::FStringNode { value } => None,
-            Node::MultilineFStringNode { value } => None,
-            Node::ContinueNode => None,
-            Node::BreakNode => None,
-            Node::Argument(_) => None,
+            Node::FStringNode { value } => todo!(),
+            Node::MultilineFStringNode { value } => todo!(),
+            Node::ContinueNode => todo!(),
+            Node::BreakNode => todo!(),
+            Node::Argument(_) => todo!(),
             Node::Array { args } => self.evaluate_arraystatement(args),
             Node::Dict { args } => self.evaluate_dictstatement(args),
-            Node::Empty => None,
-            Node::OrNode { left, right } => None,
-            Node::AndNode { left, right } => None,
-            Node::Comparison { left, right, ctype } => None,
+            Node::Empty => todo!(),
+            Node::OrNode { left, right } => todo!(),
+            Node::AndNode { left, right } => todo!(),
+            Node::Comparison { left, right, ctype } => todo!(),
             Node::Arithmetic {
                 left,
                 right,
                 operation,
-            } => None,
-            Node::NotNode { value } => None,
-            Node::CodeBlock { lines } => None,
-            Node::Index(_) => None,
-            Node::Method(_) => None,
+            } => todo!(),
+            Node::NotNode { value } => todo!(),
+            Node::CodeBlock { lines } => todo!(),
+            Node::Index(_) => todo!(),
+            Node::Method(method) => self.method_call(method),
             Node::Assignment { var_name, value } => {
                 self.assignment(&var_name, value);
                 None
             }
-            Node::PlusAssignmentNode { var_name, value } => None,
+            Node::PlusAssignmentNode { var_name, value } => todo!(),
             Node::ForeachClauseNode {
                 varname,
                 items,
                 block,
-            } => None,
-            Node::IfNode { condition, block } => None,
-            Node::IfClauseNode { ifs, elseblock } => None,
-            Node::UMinusNode { value } => None,
+            } => todo!(),
+            Node::IfNode { condition, block } => todo!(),
+            Node::IfClauseNode { ifs, elseblock } => todo!(),
+            Node::UMinusNode { value } => todo!(),
             Node::Ternary {
                 condition,
                 trueblock,
                 falseblock,
-            } => None,
+            } => todo!(),
         }
-    }
-
-    fn function_call(&mut self, _node: &Node, func_name: &str, args: &Node) -> Option<Object> {
-        let (h_posargs, h_kwargs) = self.reduce_arguments(args);
-        let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
-
-        let _res = self.process_func(func_name, args, posargs, kwargs);
-
-        None
     }
 
     fn evaluate_arraystatement(&mut self, args: &Node) -> Option<Object> {
@@ -297,7 +289,7 @@ impl Interpreter {
     fn assignment(&mut self, var_name: &str, value: &Rc<Node>) {
         let variable = self
             .evaluate_statement(value)
-            .expect("Assignment must be made");
+            .expect("Variable must be assigned to an actual value");
 
         self.set_variable(var_name, variable);
     }
@@ -306,109 +298,8 @@ impl Interpreter {
         self.variables.insert(var_name.to_string(), variable);
     }
 
-    fn process_func(
-        &mut self,
-        func_name: &str,
-        node: &Node,
-        posargs: Vec<ElementaryTypes>,
-        kwargs: HashMap<String, ElementaryTypes>,
-    ) -> Option<ElementaryTypes> {
-        match func_name {
-            "project" => {
-                self.func_project(node, posargs, kwargs);
-                None
-            }
-            "executable" => {
-                self.func_executable(node, posargs, kwargs);
-                None
-            }
-            _ => panic!("Unknown function {}", func_name),
-        }
-    }
-
-    fn func_project(
-        &mut self,
-        _node: &Node,
-        args: Vec<ElementaryTypes>,
-        kwargs: HashMap<String, ElementaryTypes>,
-    ) {
-        // TODO Fill this out
-        // Kwargs used in project function
-        struct ProjectKwargs {
-            version: Option<String>,
-            meson_version: Option<String>,
-            license: Vec<String>,
-            subproject_dir: String,
-        }
-
-        let mut project_args = ProjectKwargs {
-            version: None,
-            meson_version: None,
-            license: Vec::new(),
-            subproject_dir: String::new(),
-        };
-
-        assert!(
-            args.len() >= 2,
-            "project function requires at least 'project name' and 'language'"
-        );
-        assert!(matches!(args[0], ElementaryTypes::Str(_)));
-        assert!(
-            matches!(args[1], ElementaryTypes::Str(_))
-                || matches!(args[1], ElementaryTypes::List(_))
-        );
-
-        let project_name = if let ElementaryTypes::Str(project_name) = &args[0] {
-            project_name.clone()
-        } else {
-            String::new()
-        };
-
-        let project_langs = match &args[1] {
-            ElementaryTypes::List(langs_list) => {
-                let mut langs = Vec::new();
-
-                for l in langs_list {
-                    if let ElementaryTypes::Str(s) = l {
-                        langs.push(s.to_owned());
-                    }
-                }
-
-                langs
-            }
-            ElementaryTypes::Str(s) => vec![s.to_owned()],
-            _ => panic!("Unknown arguments"),
-        };
-
-        assert!(
-            !project_name.contains(':'),
-            "Project name can't contain ':'"
-        );
-
-        // TODO process meson_options.txt
-
-        info!("Project Name: {}", &project_name);
-        info!("Project version: {:?}", project_args.version);
-
-        self.build.project_name = project_name;
-
-        if let ElementaryTypes::Str(v) = &kwargs["version"] {
-            project_args.version = Some(v.to_string());
-        }
-
-        self.add_languages(&project_langs, true, MachineChoice::Host);
-        // self.add_languages(&project_langs, false, MachineChoice::Build);
-    }
-
-    fn func_executable(
-        &mut self,
-        node: &Node,
-        args: Vec<ElementaryTypes>,
-        kwargs: HashMap<String, ElementaryTypes>,
-    ) {
-        let mut build_target = TargetType::BuildTarget(BuildTarget::new());
-
-        self.build_target(node, args, kwargs, &mut build_target);
+    fn get_variable(&self, var_name: &str) -> Option<Object> {
+        self.variables.get(var_name).cloned()
     }
 
     fn build_target(
@@ -655,12 +546,14 @@ mod tests {
     }
 
     #[test]
-    fn executable_test() {
+    fn bool_test() {
         let code = r"
-            project('simple', ['cpp'], version: '0.1')
+        project('simple', ['cpp'], version: '0.1')
 
-            executable('simple_exe', 'main.cpp')
-        ";
+        a = true
+        b = a.to_int()
+        c = a.to_string()
+    ";
 
         let ast = Parser::new(code, "testfile").parse();
 
@@ -673,12 +566,21 @@ mod tests {
             ..Default::default()
         };
 
+        let expected = HashMap::from([
+            ("a", Object::Elementary(ElementaryTypes::Bool(true))),
+            ("b", Object::Elementary(ElementaryTypes::Int(1))),
+            (
+                "c",
+                Object::Elementary(ElementaryTypes::Str(String::from("true"))),
+            ),
+        ]);
+
         run_interpreter(&mut inter);
 
-        assert_eq!(&inter.build.project_name, "simple");
-        assert!(inter.environment.coredata.compilers.contains_key("cpp"));
-
-        assert!(!inter.build.targets.is_empty());
-        assert!(inter.build.targets.contains_key("simple_exe"));
+        assert_eq!(inter.variables.len(), 3);
+        for t in expected {
+            assert!(inter.variables.contains_key(t.0));
+            assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
+        }
     }
 }
