@@ -29,7 +29,7 @@ impl ElementaryTypes {
         match self {
             ElementaryTypes::Bool(b) => match method_name {
                 "to_int" => ElementaryTypes::Int((*b).into()),
-                "to_string" => todo!(),
+                "to_string" => ElementaryTypes::Str(b.to_string()),
                 _ => panic!("Method unknown on type bool"),
             },
             ElementaryTypes::Dict => todo!(),
