@@ -583,4 +583,45 @@ mod tests {
             assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
         }
     }
+
+    #[test]
+    fn int_test() {
+        let code = r"
+        project('simple', ['cpp'], version: '0.1')
+
+        a = 1
+        b = a.is_even()
+        c = a.is_odd()
+        d = a.to_string()
+    ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        let expected = HashMap::from([
+            ("a", Object::Elementary(ElementaryTypes::Int(1))),
+            ("b", Object::Elementary(ElementaryTypes::Bool(false))),
+            ("c", Object::Elementary(ElementaryTypes::Bool(true))),
+            (
+                "d",
+                Object::Elementary(ElementaryTypes::Str(String::from("1"))),
+            ),
+        ]);
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(inter.variables.len(), 4);
+        for t in expected {
+            assert!(inter.variables.contains_key(t.0));
+            assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
+        }
+    }
 }

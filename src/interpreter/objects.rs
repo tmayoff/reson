@@ -33,7 +33,12 @@ impl ElementaryTypes {
                 _ => panic!("Method unknown on type bool"),
             },
             ElementaryTypes::Dict => todo!(),
-            ElementaryTypes::Int(_) => todo!(),
+            ElementaryTypes::Int(i) => match method_name {
+                "is_even" => ElementaryTypes::Bool(i % 2 == 0),
+                "is_odd" => ElementaryTypes::Bool(i % 2 != 0),
+                "to_string" => ElementaryTypes::Str(i.to_string()),
+                _ => panic!("Unknown method on type int"),
+            },
             ElementaryTypes::List(_) => todo!(),
             ElementaryTypes::Str(_) => todo!(),
         }
