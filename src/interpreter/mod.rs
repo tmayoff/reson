@@ -212,6 +212,7 @@ impl Interpreter {
                 ElementaryTypes::List(_) => todo!(),
                 ElementaryTypes::Str(s) => Object::Elementary(ElementaryTypes::Str(s)),
             },
+            Object::BuiltinTypes => todo!(),
         }
     }
 
@@ -619,6 +620,55 @@ mod tests {
         run_interpreter(&mut inter);
 
         assert_eq!(inter.variables.len(), 4);
+        for t in expected {
+            assert!(inter.variables.contains_key(t.0));
+            assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
+        }
+    }
+
+    #[test]
+    fn str_test() {
+        let code = r"
+        project('simple', ['cpp'], version: '0.1')
+
+        a = 'Hello World'
+        b = a.contains('Hello')
+        c = a.endswith('Hello')
+        d = ' '.join(['Hello', 'World'])
+        e = a.replace('Hello', 'Bye')
+    ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        let expected = HashMap::from([
+            (
+                "a",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello World"))),
+            ),
+            ("b", Object::Elementary(ElementaryTypes::Bool(true))),
+            ("c", Object::Elementary(ElementaryTypes::Bool(false))),
+            (
+                "d",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello World"))),
+            ),
+            (
+                "e",
+                Object::Elementary(ElementaryTypes::Str(String::from("Bye World"))),
+            ),
+        ]);
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(inter.variables.len(), expected.len());
         for t in expected {
             assert!(inter.variables.contains_key(t.0));
             assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
