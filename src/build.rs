@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use crate::{environment::Environment, interpreter::file::File};
 
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BuildTarget {
     pub filename: String,
 }
@@ -40,7 +40,7 @@ impl BuildTarget {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TargetType {
     BuildTarget(BuildTarget),
     CustomTarget,
@@ -54,7 +54,7 @@ impl Default for TargetType {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default, Eq)]
 pub struct Target {
     pub target_type: TargetType,
     pub sources: Vec<File>,

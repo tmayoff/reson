@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct File {
     pub filename: String,
     subdir: String,

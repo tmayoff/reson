@@ -1,9 +1,12 @@
 use lazy_static::lazy_static;
 
+use crate::build::Target;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Object {
     Elementary(ElementaryTypes),
     BuiltinTypes,
+    ReturnedTypes(ReturnedObjectTypes),
 }
 
 impl Object {
@@ -11,16 +14,22 @@ impl Object {
         match self {
             Object::Elementary(e) => Object::Elementary(e.method_call(method_name, args)),
             Object::BuiltinTypes => todo!(),
+            Object::ReturnedTypes(_) => todo!(),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BuiltinTypes {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReturnedObjectTypes {
+    Target(Target),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ElementaryTypes {
-    // Void,
+    Void,
     Bool(bool),
     Dict,
     Int(i32),
@@ -176,6 +185,7 @@ impl ElementaryTypes {
                 }
                 _ => panic!("Method {method_name}, unknown on type string"),
             },
+            _ => panic!("Type has no methods"),
         }
     }
 
@@ -194,14 +204,10 @@ impl ElementaryTypes {
     }
 }
 
-#[derive(Clone)]
-pub enum ReturnedObjectTypes {
-    // File(File),
-}
-
 pub fn unholder(object: &Object) -> ElementaryTypes {
     match object {
         Object::Elementary(e) => e.to_owned(),
         Object::BuiltinTypes => todo!(),
+        Object::ReturnedTypes(_) => todo!(),
     }
 }

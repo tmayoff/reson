@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::{collections::HashMap, fs};
 
+use self::objects::ReturnedObjectTypes;
+
 #[derive(Default, Clone)]
 pub struct Interpreter {
     pub build: Build,
@@ -205,7 +207,7 @@ impl Interpreter {
     fn holderify(&self, value: Object) -> Object {
         match value {
             Object::Elementary(v) => match v {
-                // ElementaryTypes::Void => todo!(),
+                ElementaryTypes::Void => todo!(),
                 ElementaryTypes::Bool(b) => Object::Elementary(ElementaryTypes::Bool(b)),
                 ElementaryTypes::Dict => todo!(),
                 ElementaryTypes::Int(i) => Object::Elementary(ElementaryTypes::Int(i)),
@@ -213,6 +215,7 @@ impl Interpreter {
                 ElementaryTypes::Str(s) => Object::Elementary(ElementaryTypes::Str(s)),
             },
             Object::BuiltinTypes => todo!(),
+            Object::ReturnedTypes(_) => todo!(),
         }
     }
 
@@ -309,7 +312,7 @@ impl Interpreter {
         args: Vec<ElementaryTypes>,
         _kwargs: HashMap<String, ElementaryTypes>,
         targetclass: &mut TargetType,
-    ) {
+    ) -> Option<Object> {
         if args.is_empty() {
             panic!("Target does not have a name");
         }
@@ -338,7 +341,9 @@ impl Interpreter {
             &files,
         );
 
-        self.add_target(&name, target);
+        self.add_target(&name, target.clone());
+
+        Some(Object::ReturnedTypes(ReturnedObjectTypes::Target(target)))
     }
 
     fn add_target(&mut self, name: &String, tobj: Target) {
