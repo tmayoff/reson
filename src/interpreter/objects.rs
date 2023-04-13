@@ -1,3 +1,5 @@
+use lazy_static::lazy_static;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Object {
     Elementary(ElementaryTypes),
@@ -59,7 +61,7 @@ impl ElementaryTypes {
                         return ElementaryTypes::Bool(str.ends_with(pattern));
                     }
 
-                    panic!("Incorrect arguments for str.contains()");
+                    panic!("Incorrect arguments for str.endswith()");
                 }
                 "join" => {
                     assert_eq!(args.len(), 1);
@@ -75,7 +77,7 @@ impl ElementaryTypes {
                         return ElementaryTypes::Str(strings.join(str));
                     }
 
-                    panic!("Incorrect arguments for str.contains()");
+                    panic!("Incorrect arguments for str.join()");
                 }
                 "replace" => {
                     assert_eq!(args.len(), 2);
@@ -86,8 +88,101 @@ impl ElementaryTypes {
 
                     ElementaryTypes::Str(str.replace(&pattern, &replace))
                 }
+                "split" => {
+                    assert_eq!(args.len(), 1);
+                    let pat = args.first().unwrap();
+                    if let ElementaryTypes::Str(pat) = pat {
+                        let strs = str
+                            .split(pat)
+                            .map(|s| ElementaryTypes::Str(s.to_string()))
+                            .collect();
+                        return ElementaryTypes::List(strs);
+                    }
+                    panic!("Incorrect arguments for str.split()");
+                }
+                "startswith" => {
+                    assert_eq!(args.len(), 1);
+
+                    let pattern = args.first().unwrap().str().unwrap();
+                    return ElementaryTypes::Bool(str.starts_with(&pattern));
+                }
+
+                "strip" => {
+                    assert!(args.len() < 2);
+
+                    if args.len() == 1 {
+                        let chars = args.first().unwrap();
+                        if let ElementaryTypes::List(chars) = chars {
+                            let chars = chars
+                                .iter()
+                                .map(|c| c.str().unwrap())
+                                .collect::<Vec<_>>()
+                                .join("");
+
+                            let s = regex::Regex::new(&format!("[{}]", chars)).unwrap();
+                            let stripped = s.replace_all(str, "").to_string();
+                            return ElementaryTypes::Str(stripped);
+                        }
+                    } else {
+                        return ElementaryTypes::Str(str.split_whitespace().collect());
+                    }
+
+                    panic!("Incorrect arguments for str.strip()");
+                }
+                "substring" => {
+                    assert!(args.len() < 3);
+
+                    if args.len() == 1 {
+                        let mut end: i32 = args.first().unwrap().int().unwrap();
+                        if end < 0 {
+                            end = str.len() as i32 - end;
+                        }
+
+                        return ElementaryTypes::Str(str.as_str()[..end as usize].to_string());
+                    } else if args.len() == 2 {
+                        let mut it = args.iter();
+                        let mut start = it.next().unwrap().int().unwrap();
+                        if start < 0 {
+                            start = str.len() as i32 + start;
+                        }
+
+                        let mut end: i32 = it.next().unwrap().int().unwrap();
+                        if end < 0 {
+                            end = str.len() as i32 + end;
+                        }
+
+                        return ElementaryTypes::Str(
+                            str.as_str()[start as usize..end as usize].to_string(),
+                        );
+                    }
+
+                    panic!("Incorrect arguments for str.substring()");
+                }
+                "to_int" => {
+                    return ElementaryTypes::Int(str.parse().expect("Failed to parse string"));
+                }
+                "to_lower" => {
+                    return ElementaryTypes::Str(str.to_lowercase());
+                }
+                "to_upper" => {
+                    return ElementaryTypes::Str(str.to_uppercase());
+                }
+                "underscorify" => {
+                    lazy_static! {
+                        static ref RE: regex::Regex = regex::Regex::new("[^a-zA-Z0-9]").unwrap();
+                    }
+
+                    return ElementaryTypes::Str(RE.replace_all(str, "_").to_string());
+                }
                 _ => panic!("Method {method_name}, unknown on type string"),
             },
+        }
+    }
+
+    fn int(&self) -> Option<i32> {
+        match self {
+            ElementaryTypes::Int(v) => Some(v.to_owned()),
+            _ => None,
         }
     }
 

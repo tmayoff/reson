@@ -636,6 +636,20 @@ mod tests {
         c = a.endswith('Hello')
         d = ' '.join(['Hello', 'World'])
         e = a.replace('Hello', 'Bye')
+        f = a.split(' ')
+        g = a.startswith('Hello')
+        h = a.strip()
+        i = a.strip(['e', 'o'])
+        j = a.substring(5)
+        k = a.substring(5, 7)
+        l = a.substring(1, -1)
+
+        integer = '100'
+        m = integer.to_int()
+
+        n = a.to_lower()
+        o = a.to_upper()
+        p = a.underscorify()
     ";
 
         let ast = Parser::new(code, "testfile").parse();
@@ -663,6 +677,51 @@ mod tests {
             (
                 "e",
                 Object::Elementary(ElementaryTypes::Str(String::from("Bye World"))),
+            ),
+            (
+                "f",
+                Object::Elementary(ElementaryTypes::List(vec![
+                    ElementaryTypes::Str(String::from("Hello")),
+                    ElementaryTypes::Str(String::from("World")),
+                ])),
+            ),
+            ("g", Object::Elementary(ElementaryTypes::Bool(true))),
+            (
+                "h",
+                Object::Elementary(ElementaryTypes::Str(String::from("HelloWorld"))),
+            ),
+            (
+                "i",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hll Wrld"))),
+            ),
+            (
+                "j",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello"))),
+            ),
+            (
+                "k",
+                Object::Elementary(ElementaryTypes::Str(String::from(" W"))),
+            ),
+            (
+                "l",
+                Object::Elementary(ElementaryTypes::Str(String::from("ello Worl"))),
+            ),
+            (
+                "integer",
+                Object::Elementary(ElementaryTypes::Str(String::from("100"))),
+            ),
+            ("m", Object::Elementary(ElementaryTypes::Int(100))),
+            (
+                "n",
+                Object::Elementary(ElementaryTypes::Str(String::from("hello world"))),
+            ),
+            (
+                "o",
+                Object::Elementary(ElementaryTypes::Str(String::from("HELLO WORLD"))),
+            ),
+            (
+                "p",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello_World"))),
             ),
         ]);
 
