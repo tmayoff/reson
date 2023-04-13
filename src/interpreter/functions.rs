@@ -16,14 +16,17 @@ impl Interpreter {
         let obj = if let Node::ID { value } = invocable.borrow() {
             self.get_variable(value)
         } else {
-            None
+            self.evaluate_statement(invocable)
         };
 
         let obj = obj.unwrap();
 
         let method_name = &method.name;
 
-        Some(obj.method_call(method_name))
+        let (h_posargs, h_kwargs) = self.reduce_arguments(&method.args);
+        let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
+
+        Some(obj.method_call(method_name, posargs))
     }
 
     pub fn function_call(&mut self, _node: &Node, func_name: &str, args: &Node) -> Option<Object> {
@@ -69,16 +72,16 @@ impl Interpreter {
         // Kwargs used in project function
         struct ProjectKwargs {
             version: Option<String>,
-            meson_version: Option<String>,
-            license: Vec<String>,
-            subproject_dir: String,
+            // meson_version: Option<String>,
+            // license: Vec<String>,
+            // subproject_dir: String,
         }
 
         let mut project_args = ProjectKwargs {
             version: None,
-            meson_version: None,
-            license: Vec::new(),
-            subproject_dir: String::new(),
+            // meson_version: None,
+            // license: Vec::new(),
+            // subproject_dir: String::new(),
         };
 
         assert!(

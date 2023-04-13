@@ -212,6 +212,7 @@ impl Interpreter {
                 ElementaryTypes::List(_) => todo!(),
                 ElementaryTypes::Str(s) => Object::Elementary(ElementaryTypes::Str(s)),
             },
+            Object::BuiltinTypes => todo!(),
         }
     }
 
@@ -578,6 +579,155 @@ mod tests {
         run_interpreter(&mut inter);
 
         assert_eq!(inter.variables.len(), 3);
+        for t in expected {
+            assert!(inter.variables.contains_key(t.0));
+            assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
+        }
+    }
+
+    #[test]
+    fn int_test() {
+        let code = r"
+        project('simple', ['cpp'], version: '0.1')
+
+        a = 1
+        b = a.is_even()
+        c = a.is_odd()
+        d = a.to_string()
+    ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        let expected = HashMap::from([
+            ("a", Object::Elementary(ElementaryTypes::Int(1))),
+            ("b", Object::Elementary(ElementaryTypes::Bool(false))),
+            ("c", Object::Elementary(ElementaryTypes::Bool(true))),
+            (
+                "d",
+                Object::Elementary(ElementaryTypes::Str(String::from("1"))),
+            ),
+        ]);
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(inter.variables.len(), 4);
+        for t in expected {
+            assert!(inter.variables.contains_key(t.0));
+            assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
+        }
+    }
+
+    #[test]
+    fn str_test() {
+        let code = r"
+        project('simple', ['cpp'], version: '0.1')
+
+        a = 'Hello World'
+        b = a.contains('Hello')
+        c = a.endswith('Hello')
+        d = ' '.join(['Hello', 'World'])
+        e = a.replace('Hello', 'Bye')
+        f = a.split(' ')
+        g = a.startswith('Hello')
+        h = a.strip()
+        i = a.strip(['e', 'o'])
+        j = a.substring(5)
+        k = a.substring(5, 7)
+        l = a.substring(1, -1)
+
+        integer = '100'
+        m = integer.to_int()
+
+        n = a.to_lower()
+        o = a.to_upper()
+        p = a.underscorify()
+    ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        let expected = HashMap::from([
+            (
+                "a",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello World"))),
+            ),
+            ("b", Object::Elementary(ElementaryTypes::Bool(true))),
+            ("c", Object::Elementary(ElementaryTypes::Bool(false))),
+            (
+                "d",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello World"))),
+            ),
+            (
+                "e",
+                Object::Elementary(ElementaryTypes::Str(String::from("Bye World"))),
+            ),
+            (
+                "f",
+                Object::Elementary(ElementaryTypes::List(vec![
+                    ElementaryTypes::Str(String::from("Hello")),
+                    ElementaryTypes::Str(String::from("World")),
+                ])),
+            ),
+            ("g", Object::Elementary(ElementaryTypes::Bool(true))),
+            (
+                "h",
+                Object::Elementary(ElementaryTypes::Str(String::from("HelloWorld"))),
+            ),
+            (
+                "i",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hll Wrld"))),
+            ),
+            (
+                "j",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello"))),
+            ),
+            (
+                "k",
+                Object::Elementary(ElementaryTypes::Str(String::from(" W"))),
+            ),
+            (
+                "l",
+                Object::Elementary(ElementaryTypes::Str(String::from("ello Worl"))),
+            ),
+            (
+                "integer",
+                Object::Elementary(ElementaryTypes::Str(String::from("100"))),
+            ),
+            ("m", Object::Elementary(ElementaryTypes::Int(100))),
+            (
+                "n",
+                Object::Elementary(ElementaryTypes::Str(String::from("hello world"))),
+            ),
+            (
+                "o",
+                Object::Elementary(ElementaryTypes::Str(String::from("HELLO WORLD"))),
+            ),
+            (
+                "p",
+                Object::Elementary(ElementaryTypes::Str(String::from("Hello_World"))),
+            ),
+        ]);
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(inter.variables.len(), expected.len());
         for t in expected {
             assert!(inter.variables.contains_key(t.0));
             assert_eq!(inter.variables.get(t.0).unwrap().to_owned(), t.1);
