@@ -299,15 +299,13 @@ impl Interpreter {
         if args.is_empty() {
             panic!("Target does not have a name");
         }
-        let mut sources = args;
+        let mut args = args.to_owned();
+        let name = args.remove(0).elementary().unwrap().str().unwrap();
 
-        let name = sources.remove(0).elementary().unwrap().str().unwrap();
+        let sources = args;
 
-        match targetclass {
-            TargetType::BuildTarget(b) => b.filename = name.clone(),
-            TargetType::CustomTarget => todo!(),
-            TargetType::SharedLibrary => todo!(),
-            TargetType::StaticLibrary => todo!(),
+        if let TargetType::BuildTarget(b) = targetclass {
+            b.filename = name.clone();
         }
 
         let files = self.source_strings_to_files(&sources);
@@ -425,6 +423,8 @@ mod tests {
 
     use std::path::Path;
 
+    use crate::build::BuildTarget;
+
     use super::*;
 
     fn run_interpreter(inter: &mut Interpreter) {
@@ -482,6 +482,42 @@ mod tests {
         assert_eq!(&inter.build.project_name, "build_targets");
         assert!(inter.environment.coredata.compilers.contains_key("cpp"));
         assert_eq!(inter.build.targets.len(), 2);
+
+        let expected_build_targets = HashMap::from([
+            (
+                "foo",
+                Target::new(
+                    "foo",
+                    &TargetType::SharedLibrary,
+                    &PathBuf::new(),
+                    &vec![File {
+                        filename: "foo.cpp".to_string(),
+                        subdir: "".to_string(),
+                    }],
+                ),
+            ),
+            (
+                "bar",
+                Target::new(
+                    "bar",
+                    &TargetType::BuildTarget(BuildTarget {
+                        filename: "bar".to_string(),
+                    }),
+                    &PathBuf::new(),
+                    &vec![File {
+                        filename: "bar.cpp".to_string(),
+                        subdir: String::new(),
+                    }],
+                ),
+            ),
+        ]);
+
+        let targets = inter.build.targets;
+        for (name, target) in expected_build_targets {
+            assert!(targets.contains_key(name));
+
+            assert_eq!(&target, targets.get(name).unwrap());
+        }
     }
 
     #[test]

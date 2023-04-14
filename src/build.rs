@@ -54,7 +54,7 @@ impl Default for TargetType {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Target {
     pub target_type: TargetType,
     pub sources: Vec<File>,
@@ -65,11 +65,11 @@ pub struct Target {
     link_whole_targets: Vec<Target>,
 }
 
-impl PartialEq for Target {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
+//impl PartialEq for Target {
+//    fn eq(&self, other: &Self) -> bool {
+//        self.name == other.name
+//    }
+//}
 
 impl Target {
     pub fn new(name: &str, target_type: &TargetType, subdir: &PathBuf, sources: &[File]) -> Self {

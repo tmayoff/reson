@@ -126,7 +126,7 @@ impl Interpreter {
         args: Vec<Object>,
         kwargs: HashMap<String, Object>,
     ) -> Option<Object> {
-        let mut build_target = TargetType::BuildTarget(BuildTarget::new());
+        let mut build_target = TargetType::SharedLibrary;
         self.build_target(node, args, kwargs, &mut build_target)
     }
 }

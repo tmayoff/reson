@@ -6,7 +6,7 @@ use std::{
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct File {
     pub filename: String,
-    subdir: String,
+    pub subdir: String,
 }
 
 impl File {
