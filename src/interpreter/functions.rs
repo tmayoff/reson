@@ -23,16 +23,13 @@ impl Interpreter {
 
         let method_name = &method.name;
 
-        let (h_posargs, h_kwargs) = self.reduce_arguments(&method.args);
-        let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
+        let (posargs, kwargs) = self.reduce_arguments(&method.args);
 
         Some(obj.method_call(method_name, posargs))
     }
 
     pub fn function_call(&mut self, _node: &Node, func_name: &str, args: &Node) -> Option<Object> {
-        let (h_posargs, h_kwargs) = self.reduce_arguments(args);
-        let (posargs, kwargs) = self.unholder_args(h_posargs, h_kwargs);
-
+        let (posargs, kwargs) = self.reduce_arguments(args);
         self.process_func(func_name, args, posargs, kwargs)
     }
 
@@ -40,8 +37,8 @@ impl Interpreter {
         &mut self,
         func_name: &str,
         node: &Node,
-        posargs: Vec<ElementaryTypes>,
-        kwargs: HashMap<String, ElementaryTypes>,
+        posargs: Vec<Object>,
+        kwargs: HashMap<String, Object>,
     ) -> Option<Object> {
         match func_name {
             "project" => {
@@ -49,17 +46,12 @@ impl Interpreter {
                 Some(Object::Elementary(ElementaryTypes::Void))
             }
             "executable" => self.func_executable(node, posargs, kwargs),
-            "library" => self.func_library(),
+            "library" => self.func_library(node, posargs, kwargs),
             _ => panic!("Unknown function {}", func_name),
         }
     }
 
-    fn func_project(
-        &mut self,
-        _node: &Node,
-        args: Vec<ElementaryTypes>,
-        kwargs: HashMap<String, ElementaryTypes>,
-    ) {
+    fn func_project(&mut self, _node: &Node, args: Vec<Object>, kwargs: HashMap<String, Object>) {
         // TODO Fill this out
         // Kwargs used in project function
         struct ProjectKwargs {
@@ -80,26 +72,16 @@ impl Interpreter {
             args.len() >= 2,
             "project function requires at least 'project name' and 'language'"
         );
-        assert!(matches!(args[0], ElementaryTypes::Str(_)));
-        assert!(
-            matches!(args[1], ElementaryTypes::Str(_))
-                || matches!(args[1], ElementaryTypes::List(_))
-        );
 
-        let project_name = if let ElementaryTypes::Str(project_name) = &args[0] {
-            project_name.clone()
-        } else {
-            String::new()
-        };
+        let project_name = args[0].elementary().map(|p| p.str().unwrap()).unwrap();
 
-        let project_langs = match &args[1] {
+        let project_langs = match &args[1].elementary().unwrap() {
             ElementaryTypes::List(langs_list) => {
                 let mut langs = Vec::new();
 
                 for l in langs_list {
-                    if let ElementaryTypes::Str(s) = l {
-                        langs.push(s.to_owned());
-                    }
+                    let s = l.elementary().map(|s| s.str().unwrap()).unwrap();
+                    langs.push(s);
                 }
 
                 langs
@@ -120,7 +102,7 @@ impl Interpreter {
 
         self.build.project_name = project_name;
 
-        if let ElementaryTypes::Str(v) = &kwargs["version"] {
+        if let ElementaryTypes::Str(v) = &kwargs["version"].elementary().unwrap() {
             project_args.version = Some(v.to_string());
         }
 
@@ -131,15 +113,21 @@ impl Interpreter {
     fn func_executable(
         &mut self,
         node: &Node,
-        args: Vec<ElementaryTypes>,
-        kwargs: HashMap<String, ElementaryTypes>,
+        args: Vec<Object>,
+        kwargs: HashMap<String, Object>,
     ) -> Option<Object> {
         let mut build_target = TargetType::BuildTarget(BuildTarget::new());
         self.build_target(node, args, kwargs, &mut build_target)
     }
 
-    fn func_library(&mut self) -> Option<Object> {
-        None
+    fn func_library(
+        &mut self,
+        node: &Node,
+        args: Vec<Object>,
+        kwargs: HashMap<String, Object>,
+    ) -> Option<Object> {
+        let mut build_target = TargetType::BuildTarget(BuildTarget::new());
+        self.build_target(node, args, kwargs, &mut build_target)
     }
 }
 

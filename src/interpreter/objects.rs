@@ -10,11 +10,18 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn method_call(&self, method_name: &str, args: Vec<ElementaryTypes>) -> Object {
+    pub fn method_call(&self, method_name: &str, args: Vec<Object>) -> Object {
         match self {
             Object::Elementary(e) => Object::Elementary(e.method_call(method_name, args)),
             Object::BuiltinTypes => todo!(),
             Object::ReturnedTypes(_) => todo!(),
+        }
+    }
+
+    pub fn elementary(&self) -> Option<ElementaryTypes> {
+        match self {
+            Object::Elementary(t) => Some(t.to_owned()),
+            _ => None,
         }
     }
 }
@@ -33,12 +40,12 @@ pub enum ElementaryTypes {
     Bool(bool),
     Dict,
     Int(i32),
-    List(Vec<ElementaryTypes>),
+    List(Vec<Object>),
     Str(String),
 }
 
 impl ElementaryTypes {
-    fn method_call(&self, method_name: &str, args: Vec<ElementaryTypes>) -> ElementaryTypes {
+    fn method_call(&self, method_name: &str, args: Vec<Object>) -> ElementaryTypes {
         match self {
             ElementaryTypes::Bool(b) => match method_name {
                 "to_int" => ElementaryTypes::Int((*b).into()),
@@ -56,31 +63,23 @@ impl ElementaryTypes {
             ElementaryTypes::Str(str) => match method_name {
                 "contains" => {
                     assert_eq!(args.len(), 1);
-
-                    if let ElementaryTypes::Str(pattern) = args.first().unwrap() {
-                        return ElementaryTypes::Bool(str.contains(pattern));
-                    }
-
-                    panic!("Incorrect arguments for str.contains()");
+                    let pattern = args.first().unwrap().elementary().unwrap().str().unwrap();
+                    ElementaryTypes::Bool(str.contains(&pattern))
                 }
                 "endswith" => {
                     assert_eq!(args.len(), 1);
-
-                    if let ElementaryTypes::Str(pattern) = args.first().unwrap() {
-                        return ElementaryTypes::Bool(str.ends_with(pattern));
-                    }
-
-                    panic!("Incorrect arguments for str.endswith()");
+                    let pattern = args.first().unwrap().elementary().unwrap().str().unwrap();
+                    ElementaryTypes::Bool(str.ends_with(&pattern))
                 }
                 "join" => {
                     assert_eq!(args.len(), 1);
 
+                    let args = args.first().unwrap().elementary().unwrap();
+
                     let mut strings = Vec::new();
-                    if let ElementaryTypes::List(objs) = args.first().unwrap() {
+                    if let ElementaryTypes::List(objs) = args {
                         for o in objs {
-                            if let ElementaryTypes::Str(c) = o {
-                                strings.push(c.to_owned());
-                            }
+                            strings.push(o.elementary().unwrap().str().unwrap());
                         }
 
                         return ElementaryTypes::Str(strings.join(str));
@@ -92,27 +91,25 @@ impl ElementaryTypes {
                     assert_eq!(args.len(), 2);
 
                     let mut it = args.iter();
-                    let pattern = it.next().unwrap().str().unwrap();
-                    let replace = it.next().unwrap().str().unwrap();
+                    let pattern = it.next().unwrap().elementary().unwrap().str().unwrap();
+                    let replace = it.next().unwrap().elementary().unwrap().str().unwrap();
 
                     ElementaryTypes::Str(str.replace(&pattern, &replace))
                 }
                 "split" => {
                     assert_eq!(args.len(), 1);
-                    let pat = args.first().unwrap();
-                    if let ElementaryTypes::Str(pat) = pat {
-                        let strs = str
-                            .split(pat)
-                            .map(|s| ElementaryTypes::Str(s.to_string()))
-                            .collect();
-                        return ElementaryTypes::List(strs);
-                    }
-                    panic!("Incorrect arguments for str.split()");
+                    let pat = args.first().unwrap().elementary().unwrap().str().unwrap();
+                    let strs = str
+                        .split(&pat)
+                        .map(|s| Object::Elementary(ElementaryTypes::Str(s.to_string())))
+                        .collect();
+
+                    ElementaryTypes::List(strs)
                 }
                 "startswith" => {
                     assert_eq!(args.len(), 1);
 
-                    let pattern = args.first().unwrap().str().unwrap();
+                    let pattern = args.first().unwrap().elementary().unwrap().str().unwrap();
                     return ElementaryTypes::Bool(str.starts_with(&pattern));
                 }
 
@@ -120,11 +117,11 @@ impl ElementaryTypes {
                     assert!(args.len() < 2);
 
                     if args.len() == 1 {
-                        let chars = args.first().unwrap();
+                        let chars = args.first().unwrap().elementary().unwrap();
                         if let ElementaryTypes::List(chars) = chars {
                             let chars = chars
                                 .iter()
-                                .map(|c| c.str().unwrap())
+                                .map(|c| c.elementary().unwrap().str().unwrap())
                                 .collect::<Vec<_>>()
                                 .join("");
 
@@ -142,7 +139,8 @@ impl ElementaryTypes {
                     assert!(args.len() < 3);
 
                     if args.len() == 1 {
-                        let mut end: i32 = args.first().unwrap().int().unwrap();
+                        let mut end: i32 =
+                            args.first().unwrap().elementary().unwrap().int().unwrap();
                         if end < 0 {
                             end = str.len() as i32 - end;
                         }
@@ -150,12 +148,12 @@ impl ElementaryTypes {
                         return ElementaryTypes::Str(str.as_str()[..end as usize].to_string());
                     } else if args.len() == 2 {
                         let mut it = args.iter();
-                        let mut start = it.next().unwrap().int().unwrap();
+                        let mut start = it.next().unwrap().elementary().unwrap().int().unwrap();
                         if start < 0 {
                             start = str.len() as i32 + start;
                         }
 
-                        let mut end: i32 = it.next().unwrap().int().unwrap();
+                        let mut end: i32 = it.next().unwrap().elementary().unwrap().int().unwrap();
                         if end < 0 {
                             end = str.len() as i32 + end;
                         }
@@ -189,25 +187,17 @@ impl ElementaryTypes {
         }
     }
 
-    fn int(&self) -> Option<i32> {
+    pub fn int(&self) -> Option<i32> {
         match self {
             ElementaryTypes::Int(v) => Some(v.to_owned()),
             _ => None,
         }
     }
 
-    fn str(&self) -> Option<String> {
+    pub fn str(&self) -> Option<String> {
         match self {
             ElementaryTypes::Str(s) => Some(s.to_string()),
             _ => None,
         }
-    }
-}
-
-pub fn unholder(object: &Object) -> ElementaryTypes {
-    match object {
-        Object::Elementary(e) => e.to_owned(),
-        Object::BuiltinTypes => todo!(),
-        Object::ReturnedTypes(_) => todo!(),
     }
 }
