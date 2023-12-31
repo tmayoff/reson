@@ -9,11 +9,13 @@ use crate::utils::MachineChoice;
 use crate::{backend::ninja::NinjaBackend, build::TargetType};
 use crate::{build::Build, environment::Environment, parser::node::Node, BUILD_FILE_NAME};
 use file::File;
-use objects::{unholder, ElementaryTypes, Object};
+use objects::{ElementaryTypes, Object};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{collections::HashMap, fs};
+
+use self::objects::ReturnedObjectTypes;
 
 #[derive(Default, Clone)]
 pub struct Interpreter {
@@ -139,7 +141,7 @@ impl Interpreter {
             Node::BoolNode { value } => {
                 Some(self.holderify(Object::Elementary(ElementaryTypes::Bool(value.to_owned()))))
             }
-            Node::ID { value } => todo!(),
+            Node::ID { value } => self.get_variable(value),
             Node::Number { value } => {
                 Some(self.holderify(Object::Elementary(ElementaryTypes::Int(value.to_owned()))))
             }
@@ -193,8 +195,6 @@ impl Interpreter {
             panic!("Keywork arguments are invalid in array construction");
         }
 
-        let args = args.iter().map(unholder).collect();
-
         Some(Object::Elementary(ElementaryTypes::List(args)))
     }
 
@@ -205,7 +205,7 @@ impl Interpreter {
     fn holderify(&self, value: Object) -> Object {
         match value {
             Object::Elementary(v) => match v {
-                // ElementaryTypes::Void => todo!(),
+                ElementaryTypes::Void => todo!(),
                 ElementaryTypes::Bool(b) => Object::Elementary(ElementaryTypes::Bool(b)),
                 ElementaryTypes::Dict => todo!(),
                 ElementaryTypes::Int(i) => Object::Elementary(ElementaryTypes::Int(i)),
@@ -213,22 +213,8 @@ impl Interpreter {
                 ElementaryTypes::Str(s) => Object::Elementary(ElementaryTypes::Str(s)),
             },
             Object::BuiltinTypes => todo!(),
+            Object::ReturnedTypes(_) => todo!(),
         }
-    }
-
-    fn unholder_args(
-        &self,
-        args: Vec<Object>,
-        kwargs: HashMap<String, Object>,
-    ) -> (Vec<ElementaryTypes>, HashMap<String, ElementaryTypes>) {
-        let a = args.into_iter().map(|a| objects::unholder(&a)).collect();
-
-        let k = kwargs
-            .into_iter()
-            .map(|a| (a.0, objects::unholder(&a.1)))
-            .collect();
-
-        (a, k)
     }
 
     fn reduce_arguments(&mut self, args: &Node) -> (Vec<Object>, HashMap<String, Object>) {
@@ -306,27 +292,20 @@ impl Interpreter {
     fn build_target(
         &mut self,
         _node: &Node,
-        args: Vec<ElementaryTypes>,
-        _kwargs: HashMap<String, ElementaryTypes>,
+        args: Vec<Object>,
+        _kwargs: HashMap<String, Object>,
         targetclass: &mut TargetType,
-    ) {
+    ) -> Option<Object> {
         if args.is_empty() {
             panic!("Target does not have a name");
         }
-        let mut sources = args;
+        let mut args = args.to_owned();
+        let name = args.remove(0).elementary().unwrap().str().unwrap();
 
-        let holdable = sources.remove(0);
-        let name = if let ElementaryTypes::Str(n) = holdable {
-            n
-        } else {
-            String::new()
-        };
+        let sources = args;
 
-        match targetclass {
-            TargetType::BuildTarget(b) => b.filename = name.to_owned(),
-            TargetType::CustomTarget => todo!(),
-            TargetType::SharedLibrary => todo!(),
-            TargetType::StaticLibrary => todo!(),
+        if let TargetType::BuildTarget(b) = targetclass {
+            b.filename = name.clone();
         }
 
         let files = self.source_strings_to_files(&sources);
@@ -338,7 +317,9 @@ impl Interpreter {
             &files,
         );
 
-        self.add_target(&name, target);
+        self.add_target(&name, target.clone());
+
+        Some(Object::ReturnedTypes(ReturnedObjectTypes::Target(target)))
     }
 
     fn add_target(&mut self, name: &String, tobj: Target) {
@@ -365,11 +346,11 @@ impl Interpreter {
         // TODO Others
     }
 
-    fn source_strings_to_files(&self, sources: &[ElementaryTypes]) -> Vec<File> {
+    fn source_strings_to_files(&self, sources: &[Object]) -> Vec<File> {
         let mut files = Vec::new();
 
         for s in sources {
-            if let ElementaryTypes::Str(source) = s {
+            if let ElementaryTypes::Str(source) = s.elementary().unwrap() {
                 files.push(File::new(source.as_str()));
             }
         }
@@ -442,6 +423,8 @@ mod tests {
 
     use std::path::Path;
 
+    use crate::build::BuildTarget;
+
     use super::*;
 
     fn run_interpreter(inter: &mut Interpreter) {
@@ -472,6 +455,69 @@ mod tests {
 
         assert_eq!(&inter.build.project_name, "simple");
         assert!(inter.environment.coredata.compilers.contains_key("cpp"));
+    }
+
+    #[test]
+    fn build_targets() {
+        let code = r"
+            project('build_targets', 'cpp', version: '0.1')
+
+            lib = library('foo', 'foo.cpp')
+            executable('bar', 'bar.cpp', link_with: lib)
+        ";
+
+        let ast = Parser::new(code, "testfile").parse();
+
+        let env = Environment::new(Path::new("."), Path::new(".")).unwrap();
+        let build = Build::new(env.clone());
+        let mut inter = Interpreter {
+            ast: Some(ast),
+            environment: env,
+            build,
+            ..Default::default()
+        };
+
+        run_interpreter(&mut inter);
+
+        assert_eq!(&inter.build.project_name, "build_targets");
+        assert!(inter.environment.coredata.compilers.contains_key("cpp"));
+        assert_eq!(inter.build.targets.len(), 2);
+
+        let expected_build_targets = HashMap::from([
+            (
+                "foo",
+                Target::new(
+                    "foo",
+                    &TargetType::SharedLibrary,
+                    &PathBuf::new(),
+                    &vec![File {
+                        filename: "foo.cpp".to_string(),
+                        subdir: "".to_string(),
+                    }],
+                ),
+            ),
+            (
+                "bar",
+                Target::new(
+                    "bar",
+                    &TargetType::BuildTarget(BuildTarget {
+                        filename: "bar".to_string(),
+                    }),
+                    &PathBuf::new(),
+                    &vec![File {
+                        filename: "bar.cpp".to_string(),
+                        subdir: String::new(),
+                    }],
+                ),
+            ),
+        ]);
+
+        let targets = inter.build.targets;
+        for (name, target) in expected_build_targets {
+            assert!(targets.contains_key(name));
+
+            assert_eq!(&target, targets.get(name).unwrap());
+        }
     }
 
     #[test]
@@ -530,8 +576,8 @@ mod tests {
             (
                 "d",
                 Object::Elementary(ElementaryTypes::List(vec![
-                    ElementaryTypes::Str(String::from("Hello World")),
-                    ElementaryTypes::Int(1),
+                    Object::Elementary(ElementaryTypes::Str(String::from("Hello World"))),
+                    Object::Elementary(ElementaryTypes::Int(1)),
                 ])),
             ),
             ("e", Object::Elementary(ElementaryTypes::Dict)),
@@ -681,8 +727,8 @@ mod tests {
             (
                 "f",
                 Object::Elementary(ElementaryTypes::List(vec![
-                    ElementaryTypes::Str(String::from("Hello")),
-                    ElementaryTypes::Str(String::from("World")),
+                    Object::Elementary(ElementaryTypes::Str(String::from("Hello"))),
+                    Object::Elementary(ElementaryTypes::Str(String::from("World"))),
                 ])),
             ),
             ("g", Object::Elementary(ElementaryTypes::Bool(true))),
