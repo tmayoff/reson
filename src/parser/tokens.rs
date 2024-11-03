@@ -1,7 +1,7 @@
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq)]
-#[logos(skip r"[ \t\n\f]+")]
+// #[logos(skip r"[ \t\n\f]+")]
 enum Token {
     #[token("(")]
     LParen,
@@ -11,8 +11,8 @@ enum Token {
     #[token(",")]
     Comma,
 
-    #[regex(r"'(.*)'", |lex| lex.slice().to_owned())]
-    Literal(String),
+    #[regex(r#"'([^'\\]|)*'"#, |lex| lex.slice().to_owned().replace("'", ""))]
+    StringLiteral(String),
 
     #[regex("[a-zA-Z]+", |lex| lex.slice().to_owned())]
     Identifier(String),
@@ -49,7 +49,7 @@ mod tests {
                 expected: vec![
                     Token::Identifier("project".to_string()),
                     Token::LParen,
-                    Token::Literal("hello world".to_string()),
+                    Token::StringLiteral("hello world".to_string()),
                     Token::RParen,
                 ],
             },
@@ -58,7 +58,7 @@ mod tests {
             //     expected: vec![
             //         Token::Identifier("project".to_string()),
             //         Token::LParen,
-            //         Token::Literal("hello_world".to_string()),
+            //         Token::StringLiteral("hello_world".to_string()),
             //         Token::Comma,
             //     ],
             // },
@@ -71,7 +71,7 @@ mod tests {
             assert_eq!(
                 lex.clone().count(),
                 exp.clone().count(),
-                "Expected the lexed tokens to be the same as the expected"
+                "Lexed count the expected count should be the same"
             );
 
             for _ in 0..lex.clone().count() {
