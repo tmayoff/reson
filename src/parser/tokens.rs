@@ -1,6 +1,6 @@
 use logos::Logos;
 
-#[derive(Logos, Clone, Debug, PartialEq)]
+#[derive(Logos, Clone, Debug, PartialEq, Eq)]
 #[logos(skip r"[ \t\n\f]+")]
 pub enum Token {
     #[token("(")]
