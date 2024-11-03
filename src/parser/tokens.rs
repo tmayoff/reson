@@ -1,7 +1,7 @@
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq)]
-// #[logos(skip r"[ \t\n\f]+")]
+#[logos(skip r"[ \t\n\f]+")]
 enum Token {
     #[token("(")]
     LParen,
@@ -10,6 +10,8 @@ enum Token {
 
     #[token(",")]
     Comma,
+    #[token(":")]
+    Colon,
 
     #[regex(r#"'([^'\\]|)*'"#, |lex| lex.slice().to_owned().replace("'", ""))]
     StringLiteral(String),
@@ -53,15 +55,21 @@ mod tests {
                     Token::RParen,
                 ],
             },
-            // Test {
-            //     input: "project('hello world', 'cpp', version: '0.1.0')",
-            //     expected: vec![
-            //         Token::Identifier("project".to_string()),
-            //         Token::LParen,
-            //         Token::StringLiteral("hello_world".to_string()),
-            //         Token::Comma,
-            //     ],
-            // },
+            Test {
+                input: "project('hello world', 'cpp', version: '0.1.0')",
+                expected: vec![
+                    Token::Identifier("project".to_string()),
+                    Token::LParen,
+                    Token::StringLiteral("hello world".to_string()),
+                    Token::Comma,
+                    Token::StringLiteral("cpp".to_string()),
+                    Token::Comma,
+                    Token::Identifier("version".to_string()),
+                    Token::Colon,
+                    Token::StringLiteral("0.1.0".to_string()),
+                    Token::RParen,
+                ],
+            },
         ];
 
         for test in tests {
@@ -71,7 +79,8 @@ mod tests {
             assert_eq!(
                 lex.clone().count(),
                 exp.clone().count(),
-                "Lexed count the expected count should be the same"
+                "Lexed count the expected count should be the same: {:?}",
+                lex.collect::<Vec<_>>()
             );
 
             for _ in 0..lex.clone().count() {
