@@ -2,3 +2,8 @@
 build
 .cache
 result
+.idea
+
+# Added by cargo
+
+/target
