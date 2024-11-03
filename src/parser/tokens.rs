@@ -2,7 +2,7 @@ use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f]+")]
-enum Token {
+pub enum Token {
     #[token("(")]
     LParen,
     #[token(")")]
