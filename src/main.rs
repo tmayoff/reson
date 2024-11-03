@@ -1,4 +1,8 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::{path::PathBuf, str::FromStr};
+
+mod parser;
 
 #[derive(Subcommand)]
 enum Commands {
@@ -12,12 +16,15 @@ struct CliArgs {
     command: Commands,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = CliArgs::parse();
 
-
     match cli.command {
-        Commands::Setup => todo!(),
+        Commands::Setup => {
+            parser::parse_file(&PathBuf::from_str(".")?)?;
+        }
         Commands::Build => todo!(),
     }
+
+    Ok(())
 }
