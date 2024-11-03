@@ -29,6 +29,8 @@
             muon
             ninja
 
+            # Code coverage
+            llvmPackages_19.libllvm
             lcov
           ];
 
