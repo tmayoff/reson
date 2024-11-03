@@ -8,4 +8,4 @@ reson_dep = declare_dependency(
     link_with: reson_lib,
 )
 
-reson = executable('reson', 'src/main.cpp', dependencies: reson_dep)
+executable('reson', 'src/main.cpp', dependencies: reson_dep)

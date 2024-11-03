@@ -23,6 +23,7 @@
           nativeBuildInputs = with pkgs; [
             clang-tools
 
+            just
             meson
             mesonlsp
             muon
