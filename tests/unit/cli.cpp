@@ -4,9 +4,11 @@
 BOOST_AUTO_TEST_SUITE(cli)
 
 BOOST_AUTO_TEST_CASE(Builder) {
-  utils::CliBuilder builder{};
+  auto cli = utils::CliBuilder{}.add_command("setup").build();
 
-  const auto cli = builder.build();
+  std::vector<std::string_view> argv = {"help"};
+
+  cli.parse(argv);
 }
 
 BOOST_AUTO_TEST_SUITE_END();
