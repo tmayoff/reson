@@ -1,44 +1,39 @@
 {
-  description = "Flake utils demo";
-
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
     self,
-    nixpkgs,
     flake-utils,
+    nixpkgs,
+    rust-overlay,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
-        pkgs = import nixpkgs {
-          inherit system;
+        overlays = [(import rust-overlay)];
+        pkgs = (import nixpkgs) {
+          inherit system overlays;
         };
 
-        boost = pkgs.boost186;
+        rust = pkgs.rust-bin.stable.latest.default;
       in {
-        devShell = pkgs.mkShell.override {stdenv = pkgs.clangStdenv;} {
-          nativeBuildInputs = with pkgs; [
-            clang-tools
-
-            just
-            meson
-            mesonlsp
-            muon
-            ninja
-
-            # Code coverage
-            llvmPackages_19.libllvm
-            lcov
+        devShell = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            pkg-config
+            openssl
           ];
 
-          BOOST_INCLUDEDIR = "${pkgs.lib.getDev boost}/include";
-          BOOST_LIBRARYDIR = "${pkgs.lib.getLib boost}/lib";
+          nativeBuildInputs = with pkgs; [
+            (rust.override {extensions = ["rust-src" "llvm-tools-preview"];})
+            rust-analyzer
 
-          buildInputs = [
-            boost
+            cargo-llvm-cov
           ];
         };
       }
