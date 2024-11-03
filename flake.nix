@@ -27,6 +27,8 @@
             mesonlsp
             muon
             ninja
+
+            lcov
           ];
 
           BOOST_INCLUDEDIR = "${pkgs.lib.getDev boost}/include";
