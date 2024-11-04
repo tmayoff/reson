@@ -6,7 +6,10 @@ pub struct Program {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub struct Arguments {}
+pub struct Arguments {
+    pub args: Vec<Node>,
+    pub kwargs: HashMap<String, Node>,
+}
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct Function {
@@ -19,6 +22,7 @@ pub enum Node {
     None, // For debugging only
 
     Boolean(bool),
+    String(String),
 
     Identifier(String),
 

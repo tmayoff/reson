@@ -69,6 +69,21 @@ impl<'source> Parser<'source> {
         return self.e1();
     }
 
+    // Recursive descent parser for Meson's definition language.
+    // Very basic apart from the fact that we have many precedence
+    // levels so there are not enough words to describe them all.
+    // Enter numbering:
+    //
+    // 1 assignment
+    // 2 or
+    // 3 and
+    // 4 comparison
+    // 5 arithmetic
+    // 6 negation
+    // 7 funcall, method call
+    // 8 parentheses
+    // 9 plain token
+
     // Assignment
     fn e1(&mut self) -> Result<Node> {
         let left = self.e2()?;
@@ -160,6 +175,10 @@ impl<'source> Parser<'source> {
             if let Token::Identifier(ident) = tok {
                 return Ok(Node::Identifier(ident));
             }
+        } else if self.accept(Token::StringLiteral(String::new())) {
+            if let Token::StringLiteral(str) = tok {
+                return Ok(Node::String(str));
+            }
         }
 
         Ok(Node::None)
@@ -189,7 +208,28 @@ impl<'source> Parser<'source> {
     }
 
     fn args(&mut self) -> Result<Arguments> {
-        let args = Arguments {};
+        let mut s = self.statement()?;
+        let mut args = Arguments {
+            args: vec![],
+            kwargs: HashMap::new(),
+        };
+
+        loop {
+            if let Node::None = s {
+                break;
+            }
+
+            if self.accept(Token::Comma) {
+                args.args.push(s);
+            } else if self.accept(Token::Colon) {
+                if let Node::Identifier(ident) = s {
+                    args.kwargs.insert(ident, self.statement()?);
+                }
+            }
+
+            s = self.statement()?;
+        }
+
         Ok(args)
     }
 }
@@ -205,21 +245,6 @@ fn parse(input: &str) -> Result<Program> {
 
     Ok(prog)
 }
-
-// Recursive descent parser for Meson's definition language.
-// Very basic apart from the fact that we have many precedence
-// levels so there are not enough words to describe them all.
-// Enter numbering:
-//
-// 1 assignment
-// 2 or
-// 3 and
-// 4 comparison
-// 5 arithmetic
-// 6 negation
-// 7 funcall, method call
-// 8 parentheses
-// 9 plain token
 
 #[cfg(test)]
 mod tests {
@@ -237,7 +262,16 @@ mod tests {
             input: "project('hello world', 'cpp', version: '0.1.0')",
             expected: vec![Node::Function(Function {
                 name: "project".to_string(),
-                args: Arguments {},
+                args: Arguments {
+                    args: vec![
+                        Node::String("hello world".to_string()),
+                        Node::String("cpp".to_string()),
+                    ],
+                    kwargs: HashMap::from([(
+                        "version".to_string(),
+                        Node::String("0.1.0".to_string()),
+                    )]),
+                },
             })],
         }];
 
