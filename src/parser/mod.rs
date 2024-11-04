@@ -17,7 +17,7 @@ pub fn parse_file(path: &PathBuf) -> Result<()> {
 struct Parser<'source> {
     lexer: Lexer<'source, Token>,
     current: Token,
-    peeked: Token,
+    // peeked: Token,
 }
 
 impl<'source> Parser<'source> {
@@ -27,15 +27,15 @@ impl<'source> Parser<'source> {
             .next()
             .map(|e| e.expect("Failed to lex"))
             .unwrap_or(Token::EOF);
-        let c = l
-            .next()
-            .map(|e| e.expect("Failed to lex"))
-            .unwrap_or(Token::EOF);
+        // let c = l
+        //     .next()
+        //     .map(|e| e.expect("Failed to lex"))
+        //     .unwrap_or(Token::EOF);
 
         Self {
             lexer: l,
             current: t,
-            peeked: c,
+            // peeked: c,
         }
     }
 
@@ -48,22 +48,34 @@ impl<'source> Parser<'source> {
         false
     }
 
+    pub fn expect(&mut self, tok: Token) -> Result<()> {
+        if !self.accept(tok) {
+            // TODO panic here
+        }
+
+        Ok(())
+    }
+
     fn advance(&mut self) {
-        self.current = self.peeked.clone();
-        self.peeked = self
+        self.current = self
             .lexer
             .next()
-            .map(|e| e.expect("failed to lex"))
+            .map(|t| t.expect("failed to lex"))
             .unwrap_or(Token::EOF);
+        // self.peeked = self
+        //     .lexer
+        //     .next()
+        //     .map(|e| e.expect("failed to lex"))
+        //     .unwrap_or(Token::EOF);
     }
 
     fn curr(&self) -> Token {
         self.current.clone()
     }
 
-    fn peek(&self) -> Token {
-        self.peeked.clone()
-    }
+    // fn peek(&self) -> Token {
+    //     self.peeked.clone()
+    // }
 
     fn statement(&mut self) -> Result<Node> {
         return self.e1();
@@ -133,7 +145,7 @@ impl<'source> Parser<'source> {
         self.e7()
     }
 
-    // funcall, method call
+    // function all, method call
     fn e7(&mut self) -> Result<Node> {
         let left = self.e8()?;
 
@@ -141,10 +153,12 @@ impl<'source> Parser<'source> {
             // Get ident
             // TODO throw if left isn't an IdentNode
             if let Node::Identifier(ident) = left {
-                return Ok(Node::Function(Function {
+                let func = Node::Function(Function {
                     name: ident,
                     args: self.args()?,
-                }));
+                });
+                self.expect(Token::RParen)?;
+                return Ok(func);
             } else {
                 // TODO error
             }
@@ -189,8 +203,8 @@ impl<'source> Parser<'source> {
         self.statement()
     }
 
-    fn codeblock(&mut self) -> Result<Node> {
-        // TODO parse codeblock
+    fn code_block(&mut self) -> Result<Node> {
+        // TODO parse code block
 
         let mut block = vec![];
         loop {
@@ -199,7 +213,7 @@ impl<'source> Parser<'source> {
                 block.push(curr_line);
             }
 
-            if !self.accept(Token::EOF) {
+            if self.accept(Token::EOF) {
                 break;
             }
         }
@@ -237,7 +251,7 @@ impl<'source> Parser<'source> {
 fn parse(input: &str) -> Result<Program> {
     let mut parser = Parser::new(input);
 
-    let block = parser.codeblock()?;
+    let block = parser.code_block()?;
     let mut prog = Program { nodes: vec![] };
     if let Node::Codeblock(nodes) = block {
         prog.nodes = nodes;
@@ -258,22 +272,32 @@ mod tests {
             input: &'a str,
             expected: Vec<Node>,
         }
-        let tests = vec![Test {
-            input: "project('hello world', 'cpp', version: '0.1.0')",
-            expected: vec![Node::Function(Function {
-                name: "project".to_string(),
-                args: Arguments {
-                    args: vec![
-                        Node::String("hello world".to_string()),
-                        Node::String("cpp".to_string()),
-                    ],
-                    kwargs: HashMap::from([(
-                        "version".to_string(),
-                        Node::String("0.1.0".to_string()),
-                    )]),
-                },
-            })],
-        }];
+        let tests = vec![
+            Test {
+                input: "true false",
+                expected: vec![Node::Boolean(true), Node::Boolean(false)],
+            },
+            Test {
+                input: "project('hello world', 'cpp', version: '0.1.0')",
+                expected: vec![Node::Function(Function {
+                    name: "project".to_string(),
+                    args: Arguments {
+                        args: vec![
+                            Node::String("hello world".to_string()),
+                            Node::String("cpp".to_string()),
+                        ],
+                        kwargs: HashMap::from([(
+                            "version".to_string(),
+                            Node::String("0.1.0".to_string()),
+                        )]),
+                    },
+                })],
+            },
+            Test {
+                input: "",
+                expected: vec![],
+            },
+        ];
 
         for test in tests {
             let program = parse(test.input)?;
@@ -281,7 +305,8 @@ mod tests {
             assert_eq!(
                 program.nodes.len(),
                 test.expected.len(),
-                "Not enough nodes parsed"
+                "Not enough nodes parsed: {:?}",
+                program.nodes
             );
 
             for i in 0..program.nodes.len() {
