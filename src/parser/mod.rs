@@ -1,6 +1,6 @@
 mod tokens;
 
-use crate::interpreter::ast::{Arguments, Function, Node, Program};
+use crate::interpreter::ast::{Arguments, Arithmetic, Assignment, Function, MathOp, Node, Program};
 use anyhow::Result;
 use logos::{Lexer, Logos};
 use std::{collections::HashMap, fs::read_to_string, path::PathBuf};
@@ -39,7 +39,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn accept(&mut self, tok: Token) -> bool {
+    pub fn accept(&mut self, tok: &Token) -> bool {
         if std::mem::discriminant(&self.current) == std::mem::discriminant(&tok) {
             self.advance();
             return true;
@@ -48,8 +48,18 @@ impl<'source> Parser<'source> {
         false
     }
 
+    pub fn accept_any(&mut self, toks: &Vec<Token>) -> bool {
+        for tok in toks {
+            if self.accept(tok) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn expect(&mut self, tok: Token) -> Result<()> {
-        if !self.accept(tok) {
+        if !self.accept(&tok) {
             // TODO panic here
         }
 
@@ -100,6 +110,16 @@ impl<'source> Parser<'source> {
     fn e1(&mut self) -> Result<Node> {
         let left = self.e2()?;
 
+        if self.accept(&Token::PlusAssign) {
+        } else if self.accept(&Token::Assign) {
+            let value = self.e1()?;
+
+            return Ok(Node::Assignment(Assignment {
+                left: Box::new(left),
+                right: Box::new(value),
+            }));
+        }
+
         Ok(left)
     }
 
@@ -130,7 +150,27 @@ impl<'source> Parser<'source> {
     }
 
     fn e5addsub(&mut self) -> Result<Node> {
-        let left = self.e5muldiv()?;
+        let mut left = self.e5muldiv()?;
+
+        loop {
+            let tok = self.curr();
+            let op = self.accept_any(&vec![Token::Plus, Token::Minus]);
+            if op {
+                let operator = if tok == Token::Plus {
+                    MathOp::Add
+                } else {
+                    MathOp::Sub
+                };
+
+                left = Node::Arithmetic(Arithmetic {
+                    left: Box::new(left),
+                    right: Box::new(self.e5muldiv()?),
+                    op: operator,
+                });
+            } else {
+                break;
+            }
+        }
 
         Ok(left)
     }
@@ -149,7 +189,7 @@ impl<'source> Parser<'source> {
     fn e7(&mut self) -> Result<Node> {
         let left = self.e8()?;
 
-        if self.accept(Token::LParen) {
+        if self.accept(&Token::LParen) {
             // Get ident
             // TODO throw if left isn't an IdentNode
             if let Node::Identifier(ident) = left {
@@ -171,7 +211,7 @@ impl<'source> Parser<'source> {
     fn e8(&mut self) -> Result<Node> {
         let start = self.current.clone();
 
-        if self.accept(Token::LParen) {
+        if self.accept(&Token::LParen) {
             // TODO another statment
         }
 
@@ -181,15 +221,19 @@ impl<'source> Parser<'source> {
     // plain
     fn e9(&mut self) -> Result<Node> {
         let tok = self.curr().clone();
-        if self.accept(Token::True) {
+        if self.accept(&Token::True) {
             return Ok(Node::Boolean(true));
-        } else if self.accept(Token::False) {
+        } else if self.accept(&Token::False) {
             return Ok(Node::Boolean(false));
-        } else if self.accept(Token::Identifier(String::new())) {
+        } else if self.accept(&Token::Identifier(String::new())) {
             if let Token::Identifier(ident) = tok {
                 return Ok(Node::Identifier(ident));
             }
-        } else if self.accept(Token::StringLiteral(String::new())) {
+        } else if self.accept(&Token::NumberLiteral(0)) {
+            if let Token::NumberLiteral(num) = tok {
+                return Ok(Node::Number(num));
+            }
+        } else if self.accept(&Token::StringLiteral(String::new())) {
             if let Token::StringLiteral(str) = tok {
                 return Ok(Node::String(str));
             }
@@ -213,7 +257,7 @@ impl<'source> Parser<'source> {
                 block.push(curr_line);
             }
 
-            if self.accept(Token::EOF) {
+            if self.accept(&Token::EOF) {
                 break;
             }
         }
@@ -233,9 +277,9 @@ impl<'source> Parser<'source> {
                 break;
             }
 
-            if self.accept(Token::Comma) {
+            if self.accept(&Token::Comma) {
                 args.args.push(s);
-            } else if self.accept(Token::Colon) {
+            } else if self.accept(&Token::Colon) {
                 if let Node::Identifier(ident) = s {
                     args.kwargs.insert(ident, self.statement()?);
                 }
@@ -263,7 +307,7 @@ fn parse(input: &str) -> Result<Program> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interpreter::ast::{Function, Node};
+    use crate::interpreter::ast::{Assignment, Function, Node};
     use anyhow::Result;
 
     #[test]
@@ -277,6 +321,31 @@ mod tests {
                 input: "true false",
                 expected: vec![Node::Boolean(true), Node::Boolean(false)],
             },
+            Test {
+                input: "1 + 2",
+                expected: vec![Node::Arithmetic(Arithmetic {
+                    left: Box::new(Node::Number(1)),
+                    right: Box::new(Node::Number(2)),
+                    op: MathOp::Add,
+                })],
+            },
+            Test {
+                input: "ident = dependency()",
+                expected: vec![Node::Assignment(Assignment {
+                    left: Box::new(Node::Identifier("ident".to_string())),
+                    right: Box::new(Node::Function(Function {
+                        name: "dependency".to_string(),
+                        args: Arguments {
+                            args: vec![],
+                            kwargs: HashMap::new(),
+                        },
+                    })),
+                })],
+            },
+            // Test {
+            //     input: "if get_option('buildtype') == 'debug'\nendif",
+            //     expected: vec![],
+            // },
             Test {
                 input: "project('hello world', 'cpp', version: '0.1.0')",
                 expected: vec![Node::Function(Function {

@@ -18,15 +18,38 @@ pub struct Function {
 }
 
 #[derive(PartialEq, Eq, Debug)]
+pub enum MathOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct Arithmetic {
+    pub left: Box<Node>,
+    pub right: Box<Node>,
+    pub op: MathOp,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct Assignment {
+    pub left: Box<Node>,
+    pub right: Box<Node>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub enum Node {
     None, // For debugging only
 
     Boolean(bool),
+    Number(i64),
     String(String),
 
     Identifier(String),
 
-    Assignment,
+    Assignment(Assignment),
+    Arithmetic(Arithmetic),
     Or,
     And,
     Function(Function),
