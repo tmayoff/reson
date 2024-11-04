@@ -1,23 +1,45 @@
 use logos::Logos;
 
-#[derive(Logos, Clone, Debug, PartialEq)]
+#[derive(Logos, Clone, Debug, PartialEq, Eq)]
 #[logos(skip r"[ \t\n\f]+")]
-enum Token {
+pub enum Token {
+    #[token("true")]
+    True,
+    #[token("false")]
+    False,
+
     #[token("(")]
     LParen,
     #[token(")")]
     RParen,
 
+    #[token("-")]
+    Minus,
+    #[token(".")]
+    Period,
+    #[token("+")]
+    Plus,
     #[token(",")]
     Comma,
     #[token(":")]
     Colon,
+    #[token("=")]
+    Assign,
+    #[token("+=")]
+    PlusAssign,
+    #[token("==")]
+    Equal,
 
     #[regex(r#"'([^'\\]|)*'"#, |lex| lex.slice().to_owned().replace("'", ""))]
     StringLiteral(String),
 
+    #[regex("[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
+    NumberLiteral(i64),
+
     #[regex("[a-zA-Z]+", |lex| lex.slice().to_owned())]
     Identifier(String),
+
+    EOF,
 }
 
 #[cfg(test)]
@@ -34,6 +56,21 @@ mod tests {
         }
 
         let tests: Vec<Test> = vec![
+            Test {
+                input: "1234 'hello world' +-(): hello true false",
+                expected: vec![
+                    Token::NumberLiteral(1234),
+                    Token::StringLiteral("hello world".to_string()),
+                    Token::Plus,
+                    Token::Minus,
+                    Token::LParen,
+                    Token::RParen,
+                    Token::Colon,
+                    Token::Identifier("hello".to_string()),
+                    Token::True,
+                    Token::False,
+                ],
+            },
             Test {
                 input: "project",
                 expected: vec![Token::Identifier("project".to_string())],
