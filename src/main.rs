@@ -26,14 +26,7 @@ fn main() -> Result<()> {
         Commands::Setup {
             build_dir,
             source_dir,
-        } => {
-            // TODO interpret function
-            // let mut _interpreter = Interpreter::new(&source_dir.unwrap_or(".".into()), &build_dir);
-            // let root_meson = source_dir.unwrap_or(".".into()).join("meson.build");
-
-            // let prog = parser::parse_file(&root_meson)?;
-            // interpreter.interpret(&prog)?;
-        }
+        } => todo!(),
         Commands::Build => todo!(),
     }
 
