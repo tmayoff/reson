@@ -1,10 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use interpreter::Interpreter;
-use std::path::PathBuf;
 
-mod interpreter;
-mod parser;
+use std::path::PathBuf;
 
 #[derive(Subcommand)]
 enum Commands {
@@ -31,11 +28,11 @@ fn main() -> Result<()> {
             source_dir,
         } => {
             // TODO interpret function
-            let mut interpreter = Interpreter::new();
-            let root_meson = source_dir.unwrap_or(".".into()).join("meson.build");
+            // let mut _interpreter = Interpreter::new(&source_dir.unwrap_or(".".into()), &build_dir);
+            // let root_meson = source_dir.unwrap_or(".".into()).join("meson.build");
 
-            let prog = parser::parse_file(&root_meson)?;
-            interpreter.interpret(&prog)?;
+            // let prog = parser::parse_file(&root_meson)?;
+            // interpreter.interpret(&prog)?;
         }
         Commands::Build => todo!(),
     }

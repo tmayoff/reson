@@ -1,14 +1,21 @@
 mod tokens;
 
 use crate::interpreter::ast::{Arguments, Arithmetic, Assignment, Function, MathOp, Node, Program};
-use anyhow::Result;
 use logos::{Lexer, Logos};
 use std::{collections::HashMap, fs::read_to_string, path::PathBuf};
+use thiserror::Error;
 use tokens::Token;
 
-pub fn parse_file(path: &PathBuf) -> Result<Program> {
-    let content = read_to_string(path)?;
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Failed to read file")]
+    ReadError(PathBuf),
+    #[error("IO Error")]
+    Io(#[from] std::io::Error),
+}
 
+pub fn parse_file(path: &PathBuf) -> Result<Program, Error> {
+    let content = read_to_string(path).map_err(|_| Error::ReadError(path.into()))?;
     parse(&content)
 }
 
@@ -56,7 +63,7 @@ impl<'source> Parser<'source> {
         false
     }
 
-    pub fn expect(&mut self, tok: Token) -> Result<()> {
+    pub fn expect(&mut self, tok: Token) -> Result<(), Error> {
         if !self.accept(&tok) {
             // TODO panic here
         }
@@ -85,7 +92,7 @@ impl<'source> Parser<'source> {
     //     self.peeked.clone()
     // }
 
-    fn statement(&mut self) -> Result<Node> {
+    fn statement(&mut self) -> Result<Node, Error> {
         return self.e1();
     }
 
@@ -105,7 +112,7 @@ impl<'source> Parser<'source> {
     // 9 plain token
 
     // Assignment
-    fn e1(&mut self) -> Result<Node> {
+    fn e1(&mut self) -> Result<Node, Error> {
         let left = self.e2()?;
 
         if self.accept(&Token::PlusAssign) {
@@ -122,32 +129,32 @@ impl<'source> Parser<'source> {
     }
 
     // or
-    fn e2(&mut self) -> Result<Node> {
+    fn e2(&mut self) -> Result<Node, Error> {
         let left = self.e3()?;
 
         Ok(left)
     }
 
     // and
-    fn e3(&mut self) -> Result<Node> {
+    fn e3(&mut self) -> Result<Node, Error> {
         let left = self.e4()?;
 
         Ok(left)
     }
 
     // comparison
-    fn e4(&mut self) -> Result<Node> {
+    fn e4(&mut self) -> Result<Node, Error> {
         let left = self.e5()?;
 
         Ok(left)
     }
 
     // arithmetic
-    fn e5(&mut self) -> Result<Node> {
+    fn e5(&mut self) -> Result<Node, Error> {
         self.e5addsub()
     }
 
-    fn e5addsub(&mut self) -> Result<Node> {
+    fn e5addsub(&mut self) -> Result<Node, Error> {
         let mut left = self.e5muldiv()?;
 
         loop {
@@ -172,19 +179,19 @@ impl<'source> Parser<'source> {
 
         Ok(left)
     }
-    fn e5muldiv(&mut self) -> Result<Node> {
+    fn e5muldiv(&mut self) -> Result<Node, Error> {
         let left = self.e6()?;
 
         Ok(left)
     }
 
     // negation
-    fn e6(&mut self) -> Result<Node> {
+    fn e6(&mut self) -> Result<Node, Error> {
         self.e7()
     }
 
     // function all, method call
-    fn e7(&mut self) -> Result<Node> {
+    fn e7(&mut self) -> Result<Node, Error> {
         let left = self.e8()?;
 
         if self.accept(&Token::LParen) {
@@ -206,7 +213,7 @@ impl<'source> Parser<'source> {
     }
 
     // parentheses
-    fn e8(&mut self) -> Result<Node> {
+    fn e8(&mut self) -> Result<Node, Error> {
         let start = self.current.clone();
 
         if self.accept(&Token::LParen) {
@@ -217,7 +224,7 @@ impl<'source> Parser<'source> {
     }
 
     // plain
-    fn e9(&mut self) -> Result<Node> {
+    fn e9(&mut self) -> Result<Node, Error> {
         let tok = self.curr().clone();
         if self.accept(&Token::True) {
             return Ok(Node::Boolean(true));
@@ -240,12 +247,12 @@ impl<'source> Parser<'source> {
         Ok(Node::None)
     }
 
-    fn line(&mut self) -> Result<Node> {
+    fn line(&mut self) -> Result<Node, Error> {
         // TODO check for reserved words
         self.statement()
     }
 
-    fn code_block(&mut self) -> Result<Node> {
+    fn code_block(&mut self) -> Result<Node, Error> {
         // TODO parse code block
 
         let mut block = vec![];
@@ -263,7 +270,7 @@ impl<'source> Parser<'source> {
         Ok(Node::Codeblock(block))
     }
 
-    fn args(&mut self) -> Result<Arguments> {
+    fn args(&mut self) -> Result<Arguments, Error> {
         let mut s = self.statement()?;
         let mut args = Arguments {
             args: vec![],
@@ -290,7 +297,7 @@ impl<'source> Parser<'source> {
     }
 }
 
-pub fn parse(input: &str) -> Result<Program> {
+pub fn parse(input: &str) -> Result<Program, Error> {
     let mut parser = Parser::new(input);
 
     let block = parser.code_block()?;
