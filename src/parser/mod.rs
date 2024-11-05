@@ -6,12 +6,10 @@ use logos::{Lexer, Logos};
 use std::{collections::HashMap, fs::read_to_string, path::PathBuf};
 use tokens::Token;
 
-pub fn parse_file(path: &PathBuf) -> Result<()> {
+pub fn parse_file(path: &PathBuf) -> Result<Program> {
     let content = read_to_string(path)?;
 
-    parse(&content)?;
-
-    Ok(())
+    parse(&content)
 }
 
 struct Parser<'source> {
@@ -292,7 +290,7 @@ impl<'source> Parser<'source> {
     }
 }
 
-fn parse(input: &str) -> Result<Program> {
+pub fn parse(input: &str) -> Result<Program> {
     let mut parser = Parser::new(input);
 
     let block = parser.code_block()?;
