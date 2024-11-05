@@ -46,6 +46,7 @@ pub enum Token {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use coverage_helper::test;
 
     #[test]
     fn lexer() -> Result<()> {

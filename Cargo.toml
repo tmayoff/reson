@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.92"
 clap = { version = "4.5.20", features = ["derive"] }
+coverage-helper = "0.2.2"
 logos = { version = "0.14.2" }
 thiserror = "1.0.68"
