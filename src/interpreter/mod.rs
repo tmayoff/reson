@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::{parser, Builder, Project};
+use crate::{parser, BuildTarget, Builder, Project};
 use ast::{Function, Node, Program};
 use thiserror::Error;
 
@@ -66,17 +66,19 @@ impl Interpreter {
     fn interpret_function(&mut self, func: &Function) -> Result<(), Error> {
         println!("Interpret function");
         match func.name.as_str() {
-            "project" => self.interpret_project(func)?,
+            "project" => self.project(func)?,
+            "executable" => self.executable(func)?,
             _ => todo!("Unknown function"),
         }
 
         Ok(())
     }
 
-    fn interpret_project(&mut self, func: &Function) -> Result<(), Error> {
-        let args = &func.args;
+    fn project(&mut self, func: &Function) -> Result<(), Error> {
+        let args = &func.args.args;
+        let kwargs = &func.args.kwargs;
 
-        self.builder.project.name = if let Some(n) = args.args.get(0) {
+        self.builder.project.name = if let Some(n) = args.get(0) {
             if let Node::String(str) = n {
                 str.clone()
             } else {
@@ -89,6 +91,33 @@ impl Interpreter {
                 "Project requires arguments".to_string(),
             ));
         };
+        Ok(())
+    }
+
+    fn executable(&mut self, func: &Function) -> Result<(), Error> {
+        println!("Add executable build target");
+
+        let args = &func.args.args;
+        let kwargs = &func.args.kwargs;
+
+        let target_name = if let Some(n) = args.get(0) {
+            if let Node::String(str) = n {
+                str.clone()
+            } else {
+                return Err(Error::InvalidArguments(
+                    "First argument to executable must be a target's name".to_string(),
+                ));
+            }
+        } else {
+            return Err(Error::InvalidArguments(
+                "Project requires arguments".to_string(),
+            ));
+        };
+
+        self.builder
+            .build_targets
+            .push(BuildTarget { name: target_name });
+
         Ok(())
     }
 }

@@ -7,6 +7,8 @@ pub mod parser;
 pub struct Builder {
     pub project: Project,
     pub compiler: Compiler,
+
+    pub build_targets: Vec<BuildTarget>,
 }
 
 #[derive(Default)]
@@ -21,4 +23,9 @@ pub struct Project {
 pub struct Compiler {
     pub name: String,
     pub path: PathBuf,
+}
+
+#[derive(Default)]
+pub struct BuildTarget {
+    pub name: String,
 }
