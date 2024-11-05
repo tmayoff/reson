@@ -1,7 +1,7 @@
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq, Eq)]
-#[logos(skip r"[ \t\n\f]+")]
+#[logos(skip r"([ \t\n\f]+)|(#[^\n]*\n?)")]
 pub enum Token {
     #[token("true")]
     True,
