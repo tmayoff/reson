@@ -122,7 +122,7 @@ impl Interpreter {
             })?
         } else {
             return Err(Error::InvalidArguments(
-                "Project requires arguments".to_string(),
+                "Executable requires arguments".to_string(),
             ));
         };
 

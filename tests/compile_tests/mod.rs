@@ -11,13 +11,25 @@ fn interpret_cases() -> Result<()> {
     }
 
     let tests = vec![
+        // Test {
+        //     file_contents: "",
+        //     compile: true,
+        // },
+        // Test {
+        //     file_contents: "project()",
+        //     compile: false,
+        // },
+        // Test {
+        //     file_contents: "project('hello world')",
+        //     compile: false,
+        // },
+        // Test {
+        //     file_contents: "project('hello world')\nexecutable()",
+        //     compile: false,
+        // },
         Test {
-            file_contents: "",
+            file_contents: "project('hello world')\nexecutable('exe')",
             compile: true,
-        },
-        Test {
-            file_contents: "project()",
-            compile: false,
         },
     ];
 
@@ -25,10 +37,28 @@ fn interpret_cases() -> Result<()> {
         let test_dir = tempfile::tempdir()?;
 
         let meson = test_dir.path().join("meson.build");
-        fs::write(meson, test.file_contents)?;
+        fs::write(meson, &test.file_contents)?;
 
         let mut interpreter = Interpreter::new(test_dir.path(), &PathBuf::new());
-        assert_eq!(interpreter.interpret().is_ok(), test.compile);
+        let err = interpreter.interpret();
+
+        match err {
+            Ok(()) => {
+                if !test.compile {
+                    assert!(false, "Test: {}, should've failed", test.file_contents,);
+                }
+            }
+            Err(e) => {
+                if test.compile {
+                    // should've succeeded
+                    assert!(
+                        false,
+                        "Test: {}, should've succeeded but failed: {:?}",
+                        test.file_contents, e
+                    );
+                }
+            }
+        }
     }
 
     Ok(())

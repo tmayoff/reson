@@ -288,6 +288,9 @@ impl<'source> Parser<'source> {
                 if let Node::Identifier(ident) = s {
                     args.kwargs.insert(ident, self.statement()?);
                 }
+            } else {
+                args.args.push(s);
+                return Ok(args);
             }
 
             s = self.statement()?;
