@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+mod compiler;
 pub mod interpreter;
 pub mod parser;
 

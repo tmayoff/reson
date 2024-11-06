@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::{parser, BuildTarget, Builder, Project};
 use ast::{Function, Node, Program};
@@ -8,11 +11,20 @@ pub mod ast;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Couldn't find a meson.build file at the path {0}")]
+    MesonBuildNotFound(PathBuf),
+
     #[error("Arguments passed to function don't match with required")]
     InvalidArguments(String),
 
     #[error("Parse error")]
     Parse(#[from] parser::Error),
+
+    #[error("Invalid node expected: `{0:?}`")]
+    InvalidNode(Node),
+
+    #[error("Expected {}, got {:?}", expected, got)]
+    Expected { expected: String, got: Node },
 }
 
 pub struct Interpreter {
@@ -34,8 +46,13 @@ impl Interpreter {
     }
 
     pub fn interpret(&mut self) -> Result<(), Error> {
+        let meson_build = self.builder.project.source_dir.join("meson.build");
+        if !meson_build.exists() {
+            return Err(Error::MesonBuildNotFound(meson_build));
+        }
+
         // TODO check if file exists
-        let prog = parser::parse_file(&self.builder.project.source_dir.join("meson.build"))?;
+        let prog = parser::parse_file(&meson_build)?;
 
         self.interpret_program(&prog)?;
 
@@ -101,13 +118,10 @@ impl Interpreter {
         let kwargs = &func.args.kwargs;
 
         let target_name = if let Some(n) = args.get(0) {
-            if let Node::String(str) = n {
-                str.clone()
-            } else {
-                return Err(Error::InvalidArguments(
-                    "First argument to executable must be a target's name".to_string(),
-                ));
-            }
+            n.clone().into_string().map_err(|e| Error::Expected {
+                expected: "String".to_string(),
+                got: e,
+            })?
         } else {
             return Err(Error::InvalidArguments(
                 "Project requires arguments".to_string(),

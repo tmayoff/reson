@@ -1,3 +1,4 @@
+use enum_as_inner::EnumAsInner;
 use std::collections::HashMap;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -38,7 +39,7 @@ pub struct Assignment {
     pub right: Box<Node>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, EnumAsInner)]
 pub enum Node {
     None, // For debugging only
 
