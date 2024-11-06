@@ -20,6 +20,10 @@ fn interpret_cases() -> Result<()> {
             compile: false,
         },
         Test {
+            file_contents: "project(hello_world)",
+            compile: false,
+        },
+        Test {
             file_contents: "project('hello world')",
             compile: true,
         },
