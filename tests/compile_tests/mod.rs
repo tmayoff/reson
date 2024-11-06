@@ -21,7 +21,7 @@ fn interpret_cases() -> Result<()> {
         },
         Test {
             file_contents: "project('hello world')",
-            compile: false,
+            compile: true,
         },
         Test {
             file_contents: "project('hello world')\nexecutable()",
