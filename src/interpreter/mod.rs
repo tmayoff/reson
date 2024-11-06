@@ -96,18 +96,16 @@ impl Interpreter {
         let kwargs = &func.args.kwargs;
 
         self.builder.project.name = if let Some(n) = args.get(0) {
-            if let Node::String(str) = n {
-                str.clone()
-            } else {
-                return Err(Error::InvalidArguments(
-                    "First argument to project must be a project name string".to_string(),
-                ));
-            }
+            n.clone().into_string().map_err(|e| Error::Expected {
+                expected: "String".to_string(),
+                got: e,
+            })?
         } else {
             return Err(Error::InvalidArguments(
                 "Project requires arguments".to_string(),
             ));
         };
+
         Ok(())
     }
 

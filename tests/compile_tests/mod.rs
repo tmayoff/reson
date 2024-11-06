@@ -1,7 +1,38 @@
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 use anyhow::Result;
 use reson::interpreter::Interpreter;
+
+#[test]
+fn interpret_cases() -> Result<()> {
+    struct Test<'a> {
+        file_contents: &'a str,
+        compile: bool,
+    }
+
+    let tests = vec![
+        Test {
+            file_contents: "",
+            compile: true,
+        },
+        Test {
+            file_contents: "project()",
+            compile: false,
+        },
+    ];
+
+    for test in tests {
+        let test_dir = tempfile::tempdir()?;
+
+        let meson = test_dir.path().join("meson.build");
+        fs::write(meson, test.file_contents)?;
+
+        let mut interpreter = Interpreter::new(test_dir.path(), &PathBuf::new());
+        assert_eq!(interpreter.interpret().is_ok(), test.compile);
+    }
+
+    Ok(())
+}
 
 #[test]
 fn missing_build() {
