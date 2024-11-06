@@ -11,22 +11,22 @@ fn interpret_cases() -> Result<()> {
     }
 
     let tests = vec![
-        // Test {
-        //     file_contents: "",
-        //     compile: true,
-        // },
-        // Test {
-        //     file_contents: "project()",
-        //     compile: false,
-        // },
-        // Test {
-        //     file_contents: "project('hello world')",
-        //     compile: false,
-        // },
-        // Test {
-        //     file_contents: "project('hello world')\nexecutable()",
-        //     compile: false,
-        // },
+        Test {
+            file_contents: "",
+            compile: true,
+        },
+        Test {
+            file_contents: "project()",
+            compile: false,
+        },
+        Test {
+            file_contents: "project('hello world')",
+            compile: false,
+        },
+        Test {
+            file_contents: "project('hello world')\nexecutable()",
+            compile: false,
+        },
         Test {
             file_contents: "project('hello world')\nexecutable('exe')",
             compile: true,
