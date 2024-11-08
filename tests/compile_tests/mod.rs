@@ -35,6 +35,13 @@ fn interpret_cases() -> Result<()> {
             file_contents: "project('hello world')\nexecutable('exe')",
             compile: true,
         },
+        // Test {
+        //     file_contents: r#"project('hello world')
+        //     if get_option('buildtype') == 'debug'
+        //         executable('exe')
+        //     endif"#,
+        //     compile: true,
+        // },
     ];
 
     for test in tests {

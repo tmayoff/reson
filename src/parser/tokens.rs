@@ -1,7 +1,7 @@
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq, Eq)]
-#[logos(skip r"([ \t\n\f]+)|(#[^\n]*\n?)")]
+#[logos(skip r"([ \t\f]+)|(#[^\n]*\n?)")]
 pub enum Token {
     #[token("true")]
     True,
@@ -12,6 +12,11 @@ pub enum Token {
     LParen,
     #[token(")")]
     RParen,
+
+    #[token("if")]
+    If,
+    #[token("endif")]
+    Endif,
 
     #[token("-")]
     Minus,
@@ -38,6 +43,9 @@ pub enum Token {
 
     #[regex("[a-zA-Z]+", |lex| lex.slice().to_owned())]
     Identifier(String),
+
+    #[token("\n")]
+    EOL,
 
     EOF,
 }

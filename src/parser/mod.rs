@@ -1,6 +1,8 @@
 mod tokens;
 
-use crate::interpreter::ast::{Arguments, Arithmetic, Assignment, Function, MathOp, Node, Program};
+use crate::interpreter::ast::{
+    Arguments, Arithmetic, Assignment, Function, If, MathOp, Node, Program,
+};
 use logos::{Lexer, Logos};
 use std::{collections::HashMap, fs::read_to_string, path::PathBuf};
 use thiserror::Error;
@@ -24,7 +26,6 @@ pub fn parse_file(path: &PathBuf) -> Result<Program, Error> {
 struct Parser<'source> {
     lexer: Lexer<'source, Token>,
     current: Token,
-    // peeked: Token,
 }
 
 impl<'source> Parser<'source> {
@@ -38,7 +39,6 @@ impl<'source> Parser<'source> {
         Ok(Self {
             lexer: l,
             current: t,
-            // peeked: c,
         })
     }
 
@@ -74,11 +74,6 @@ impl<'source> Parser<'source> {
             Ok(t) => Ok(t),
             Err(_) => Err(Error::LexError(self.lexer.slice().to_string())),
         }?;
-        // self.peeked = self
-        //     .lexer
-        //     .next()
-        //     .map(|e| e.expect("failed to lex"))
-        //     .unwrap_or(Token::EOF);
         Ok(())
     }
 
@@ -247,6 +242,16 @@ impl<'source> Parser<'source> {
 
     fn line(&mut self) -> Result<Node, Error> {
         // TODO check for reserved words
+        let block_start = self.statement()?;
+        if self.curr() == Token::EOL {
+            return Ok(Node::None);
+        }
+        if self.accept(&Token::If)? {
+            let ifblock = self.ifblock()?;
+            self.expect(Token::Endif)?;
+            return Ok(Node::If(ifblock));
+        }
+
         self.statement()
     }
 
@@ -296,6 +301,17 @@ impl<'source> Parser<'source> {
 
         Ok(args)
     }
+
+    fn ifblock(&mut self) -> Result<If, Error> {
+        // let if_node = If {};
+        let condition = self.statement()?;
+        let clause = If {};
+        self.expect(Token::EOL)?;
+
+        let block = self.code_block()?;
+
+        return Ok(clause);
+    }
 }
 
 pub fn parse(input: &str) -> Result<Program, Error> {
@@ -317,6 +333,7 @@ mod tests {
     use anyhow::Result;
 
     #[test]
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn parser() -> Result<()> {
         struct Test<'a> {
             input: &'a str,
@@ -348,10 +365,12 @@ mod tests {
                     })),
                 })],
             },
-            // Test {
-            //     input: "if get_option('buildtype') == 'debug'\nendif",
-            //     expected: vec![],
-            // },
+            Test {
+                input: r#"
+                if get_option('buildtype') == 'debug'
+                endif"#,
+                expected: vec![Node::If(If {})],
+            },
             Test {
                 input: "project('hello world', 'cpp', version: '0.1.0')",
                 expected: vec![Node::Function(Function {

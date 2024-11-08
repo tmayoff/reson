@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use crate::{parser, BuildTarget, Builder, Project};
 use ast::{Function, Node, Program};
@@ -70,6 +67,7 @@ impl Interpreter {
                 ast::Node::Assignment(_) => todo!(),
                 ast::Node::Arithmetic(_) => todo!(),
                 ast::Node::Or => todo!(),
+                ast::Node::If(_) => todo!(),
                 ast::Node::And => todo!(),
                 ast::Node::Function(function) => self.interpret_function(function)?,
                 ast::Node::Program(_) => todo!(),
@@ -126,30 +124,11 @@ impl Interpreter {
             ));
         };
 
-        self.builder
-            .build_targets
-            .push(BuildTarget { name: target_name });
+        self.builder.build_targets.push(BuildTarget {
+            name: target_name,
+            files: vec![],
+        });
 
         Ok(())
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::parser;
-//     use anyhow::Result;
-
-//     #[test]
-//     fn project() -> Result<()> {
-//         let input = "project('hello world', 'cpp')";
-//         let prog = parser::parse(input)?;
-
-//         let mut interpreter = Interpreter::new();
-//         interpreter.interpret(&prog)?;
-
-//         assert_eq!(interpreter.builder.project.name, "hello world".to_string());
-
-//         Ok(())
-//     }
-// }

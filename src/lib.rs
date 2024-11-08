@@ -31,4 +31,5 @@ pub struct Compiler {
 #[derive(Default)]
 pub struct BuildTarget {
     pub name: String,
+    pub files: Vec<PathBuf>,
 }

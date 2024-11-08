@@ -39,6 +39,11 @@ pub struct Assignment {
     pub right: Box<Node>,
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct If {
+    // ifs: Vec<Node>,
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, EnumAsInner)]
 pub enum Node {
     None, // For debugging only
@@ -48,6 +53,8 @@ pub enum Node {
     String(String),
 
     Identifier(String),
+
+    If(If),
 
     Assignment(Assignment),
     Arithmetic(Arithmetic),
