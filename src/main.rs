@@ -1,13 +1,15 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::{path::PathBuf, str::FromStr};
 
-mod interpreter;
-mod parser;
+use std::path::PathBuf;
 
 #[derive(Subcommand)]
 enum Commands {
-    Setup,
+    Setup {
+        #[arg(short = 'C')]
+        source_dir: Option<PathBuf>,
+        build_dir: PathBuf,
+    },
     Build,
 }
 
@@ -21,9 +23,10 @@ fn main() -> Result<()> {
     let cli = CliArgs::parse();
 
     match cli.command {
-        Commands::Setup => {
-            parser::parse_file(&PathBuf::from_str(".")?)?;
-        }
+        Commands::Setup {
+            build_dir,
+            source_dir,
+        } => todo!(),
         Commands::Build => todo!(),
     }
 

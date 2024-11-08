@@ -1,7 +1,7 @@
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq, Eq)]
-#[logos(skip r"[ \t\n\f]+")]
+#[logos(skip r"([ \t\f]+)|(#[^\n]*\n?)")]
 pub enum Token {
     #[token("true")]
     True,
@@ -12,6 +12,11 @@ pub enum Token {
     LParen,
     #[token(")")]
     RParen,
+
+    #[token("if")]
+    If,
+    #[token("endif")]
+    Endif,
 
     #[token("-")]
     Minus,
@@ -36,8 +41,11 @@ pub enum Token {
     #[regex("[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
     NumberLiteral(i64),
 
-    #[regex("[a-zA-Z]+", |lex| lex.slice().to_owned())]
+    #[regex("[a-zA-Z_]+", |lex| lex.slice().to_owned())]
     Identifier(String),
+
+    #[token("\n")]
+    EOL,
 
     EOF,
 }
@@ -46,6 +54,7 @@ pub enum Token {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use coverage_helper::test;
 
     #[test]
     fn lexer() -> Result<()> {
@@ -57,7 +66,7 @@ mod tests {
 
         let tests: Vec<Test> = vec![
             Test {
-                input: "1234 'hello world' +-(): hello true false",
+                input: "1234 'hello world' +-(): hello true false hello_world",
                 expected: vec![
                     Token::NumberLiteral(1234),
                     Token::StringLiteral("hello world".to_string()),
@@ -69,6 +78,7 @@ mod tests {
                     Token::Identifier("hello".to_string()),
                     Token::True,
                     Token::False,
+                    Token::Identifier("hello_world".to_string()),
                 ],
             },
             Test {

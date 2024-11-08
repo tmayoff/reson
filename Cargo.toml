@@ -8,4 +8,13 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.92"
 clap = { version = "4.5.20", features = ["derive"] }
+enum-as-inner = "0.6.1"
 logos = { version = "0.14.2" }
+thiserror = "1.0.68"
+
+[dev-dependencies]
+tempfile = "3.13.0"
+coverage-helper = "0.2.2"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }
