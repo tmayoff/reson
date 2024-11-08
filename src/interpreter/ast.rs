@@ -40,8 +40,30 @@ pub struct Assignment {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
+pub struct IfClause {
+    pub ifs: Vec<If>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct If {
-    // ifs: Vec<Node>,
+    pub condition: Node,
+    pub block: Node,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum CompareOp {
+    Equal,
+    Less,
+    LessEq,
+    Greater,
+    GreaterEq,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct Comparison {
+    pub left: Box<Node>,
+    pub op: CompareOp,
+    pub right: Box<Node>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, EnumAsInner)]
@@ -54,9 +76,10 @@ pub enum Node {
 
     Identifier(String),
 
-    If(If),
+    IfClause(IfClause),
 
     Assignment(Assignment),
+    Comparison(Comparison),
     Arithmetic(Arithmetic),
     Or,
     And,

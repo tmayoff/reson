@@ -1,7 +1,8 @@
 mod tokens;
 
 use crate::interpreter::ast::{
-    Arguments, Arithmetic, Assignment, Function, If, MathOp, Node, Program,
+    Arguments, Arithmetic, Assignment, CompareOp, Comparison, Function, If, IfClause, MathOp, Node,
+    Program,
 };
 use logos::{Lexer, Logos};
 use std::{collections::HashMap, fs::read_to_string, path::PathBuf};
@@ -139,6 +140,25 @@ impl<'source> Parser<'source> {
     fn e4(&mut self) -> Result<Node, Error> {
         let left = self.e5()?;
 
+        let comparison_ops = [Token::Equal];
+        for compare in comparison_ops {
+            let op = self.curr();
+            if self.accept(&compare)? {
+                let op = match op {
+                    Token::Equal => CompareOp::Equal,
+                    _ => todo!("Compare op doesn't exist {:?}", self.curr()),
+                };
+
+                return Ok(Node::Comparison(Comparison {
+                    left: Box::new(left),
+                    op,
+                    right: Box::new(self.e5()?),
+                }));
+            }
+        }
+
+        // TODO check for Token::Not
+
         Ok(left)
     }
 
@@ -207,7 +227,7 @@ impl<'source> Parser<'source> {
 
     // parentheses
     fn e8(&mut self) -> Result<Node, Error> {
-        let start = self.current.clone();
+        let _start = self.current.clone();
 
         if self.accept(&Token::LParen)? {
             // TODO another statment
@@ -240,39 +260,6 @@ impl<'source> Parser<'source> {
         Ok(Node::None)
     }
 
-    fn line(&mut self) -> Result<Node, Error> {
-        // TODO check for reserved words
-        let block_start = self.statement()?;
-        if self.curr() == Token::EOL {
-            return Ok(Node::None);
-        }
-        if self.accept(&Token::If)? {
-            let ifblock = self.ifblock()?;
-            self.expect(Token::Endif)?;
-            return Ok(Node::If(ifblock));
-        }
-
-        self.statement()
-    }
-
-    fn code_block(&mut self) -> Result<Node, Error> {
-        // TODO parse code block
-
-        let mut block = vec![];
-        loop {
-            let curr_line = self.line()?;
-            if curr_line != Node::None {
-                block.push(curr_line);
-            }
-
-            if self.accept(&Token::EOF)? {
-                break;
-            }
-        }
-
-        Ok(Node::Codeblock(block))
-    }
-
     fn args(&mut self) -> Result<Arguments, Error> {
         let mut s = self.statement()?;
         let mut args = Arguments {
@@ -302,15 +289,49 @@ impl<'source> Parser<'source> {
         Ok(args)
     }
 
-    fn ifblock(&mut self) -> Result<If, Error> {
+    fn ifblock(&mut self) -> Result<IfClause, Error> {
         // let if_node = If {};
         let condition = self.statement()?;
-        let clause = If {};
+        let mut clause = IfClause { ifs: vec![] };
         self.expect(Token::EOL)?;
 
         let block = self.code_block()?;
 
+        clause.ifs.push(If { condition, block });
+
+        // Elseif blocks
+
         return Ok(clause);
+    }
+
+    fn line(&mut self) -> Result<Node, Error> {
+        let _block_start = self.curr();
+
+        if self.curr() == Token::EOL {
+            return Ok(Node::None);
+        }
+        if self.accept(&Token::If)? {
+            let ifblock = self.ifblock()?;
+            self.expect(Token::Endif)?;
+            return Ok(Node::IfClause(ifblock));
+        }
+
+        self.statement()
+    }
+
+    fn code_block(&mut self) -> Result<Node, Error> {
+        let mut block = vec![];
+        let mut cond = true;
+        while cond {
+            let curr_line = self.line()?;
+            if curr_line != Node::None {
+                block.push(curr_line);
+            }
+
+            cond = self.accept(&Token::EOL)?;
+        }
+
+        Ok(Node::Codeblock(block))
     }
 }
 
@@ -341,7 +362,7 @@ mod tests {
         }
         let tests = vec![
             Test {
-                input: "true false",
+                input: "true\nfalse",
                 expected: vec![Node::Boolean(true), Node::Boolean(false)],
             },
             Test {
@@ -369,7 +390,22 @@ mod tests {
                 input: r#"
                 if get_option('buildtype') == 'debug'
                 endif"#,
-                expected: vec![Node::If(If {})],
+                expected: vec![Node::IfClause(IfClause {
+                    ifs: vec![If {
+                        condition: Node::Comparison(Comparison {
+                            left: Box::new(Node::Function(Function {
+                                name: "get_option".to_string(),
+                                args: Arguments {
+                                    args: vec![Node::String("buildtype".to_string())],
+                                    kwargs: HashMap::new(),
+                                },
+                            })),
+                            op: CompareOp::Equal,
+                            right: Box::new(Node::String("debug".to_string())),
+                        }),
+                        block: Node::Codeblock(vec![]),
+                    }],
+                })],
             },
             Test {
                 input: "project('hello world', 'cpp', version: '0.1.0')",
@@ -399,8 +435,11 @@ mod tests {
             assert_eq!(
                 program.nodes.len(),
                 test.expected.len(),
-                "Not enough nodes parsed: {:?}",
-                program.nodes
+                "Not enough nodes parsed (got: {}, expected: {}): {:?}\n{:?}",
+                program.nodes.len(),
+                test.expected.len(),
+                program.nodes,
+                test.input
             );
 
             for i in 0..program.nodes.len() {
